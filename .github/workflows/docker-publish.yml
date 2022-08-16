@@ -5,13 +5,13 @@ on:
     inputs:
       trigger:
         description: 'Manually trigger'
-        required: true
+        required: false
 
 env:
   TZ: Europe/Copenhagen
 jobs:
   build:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-20.04
 
     steps:
     - name: Checkout
@@ -23,12 +23,12 @@ jobs:
       run: |
         sudo dpkg --add-architecture i386
         sudo -E apt-get -qq update
-        sudo -E apt-get -qq install libtool-bin cmake libproxy-dev uuid-dev liblzo2-dev autoconf automake bash bison \
+        sudo -E apt-get -qq install curl locales libtool-bin cmake libproxy-dev uuid-dev liblzo2-dev autoconf automake bash bison \
                      bzip2 diffutils file flex m4 g++ gawk groff-base libncurses5-dev libtool libslang2 make patch perl pkg-config shtool \
-                     subversion tar texinfo zlib1g zlib1g-dev git gettext libexpat1-dev libssl-dev cvs gperf unzip \
+                     subversion tar texinfo zlib1g zlib1g-dev gettext libexpat1-dev libssl-dev cvs gperf unzip \
                      python libxml-parser-perl gcc-multilib gconf-editor libxml2-dev g++-multilib gitk libncurses5 mtd-utils \
                      libncurses5-dev libvorbis-dev git autopoint autogen automake-1.15 sed build-essential intltool libglib2.0-dev \
-                     xutils-dev lib32z1-dev lib32stdc++6 xsltproc gtk-doc-tools libelf1:i386
+                     xutils-dev lib32z1-dev lib32stdc++6 xsltproc gtk-doc-tools libelf1:i386 bc rsync
         sudo -E apt-get -qq autoremove --purge
         sudo -E apt-get -qq clean
         sudo timedatectl set-timezone "$TZ"
@@ -36,7 +36,6 @@ jobs:
         mv /bin/sh.bash /bin/sh
         sudo mkdir -p /workdir
         sudo chown $USER:$GROUPS /workdir
-
     - name: Clone source code
       working-directory: /workdir
       run: |
