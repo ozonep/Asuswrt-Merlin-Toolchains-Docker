@@ -26,7 +26,7 @@ jobs:
         sudo apt-get install -y curl libtool-bin cmake libproxy-dev uuid-dev liblzo2-dev autoconf automake bash bison \
                      bzip2 diffutils file flex m4 g++ gawk groff-base libncurses5-dev libtool libslang2 make patch perl pkg-config shtool \
                      subversion tar texinfo zlib1g zlib1g-dev gettext libexpat1-dev libssl-dev cvs gperf unzip \
-                     python3 libxml-parser-perl gcc-multilib gconf-editor libxml2-dev g++-multilib git gitk libncurses5 mtd-utils \
+                     python3 libxml-parser-perl gcc-multilib gconf-editor libxml2-dev g++-multilib git-gui gitk libncurses5 mtd-utils \
                      libncurses5-dev libvorbis-dev autopoint autogen automake-1.15 sed build-essential intltool libglib2.0-dev \
                      xutils-dev lib32z1-dev lib32stdc++6 xsltproc gtk-doc-tools libelf1:i386
         sudo apt-get autoremove --purge
