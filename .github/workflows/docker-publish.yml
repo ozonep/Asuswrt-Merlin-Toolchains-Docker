@@ -11,7 +11,7 @@ env:
   TZ: Europe/Copenhagen
 jobs:
   build:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-20.04
 
     steps:
     - name: Checkout
@@ -23,6 +23,7 @@ jobs:
       run: |
         sudo dpkg --add-architecture i386
         sudo apt-get update -y
+        sudo apt-get upgrade -y
         sudo apt-get install -y -qq curl libtool-bin cmake libproxy-dev uuid-dev liblzo2-dev autoconf automake bash bison \
                      bzip2 diffutils file flex m4 g++ gawk groff-base libncurses5-dev libtool libslang2 make patch perl pkg-config shtool \
                      subversion tar texinfo zlib1g zlib1g-dev gettext libexpat1-dev libssl-dev cvs gperf unzip \
