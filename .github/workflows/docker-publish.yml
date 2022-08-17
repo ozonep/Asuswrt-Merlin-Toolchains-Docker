@@ -44,7 +44,7 @@ jobs:
       working-directory: /workdir
       run: |
         git clone --depth=1 https://github.com/RMerl/am-toolchains toolchain
-        git clone --depth=1 https://github.com/RMerl/asuswrt-merlin.ng merlin 
+        git clone --branch=386.7_2 https://github.com/RMerl/asuswrt-merlin.ng merlin 
 
     - name: Setting up toolchains
       run: |
@@ -56,7 +56,6 @@ jobs:
     - name: Build
       run: |
         cd /workdir/merlin
-        git checkout 90eb4a0
         cd ./release/src-rt-5.02axhnd.675x
         make rt-ax56u
 
