@@ -9,6 +9,9 @@ on:
 
 env:
   TZ: Europe/Copenhagen
+  TOOLCHAIN_BASE: /opt/toolchains
+  DEBIAN_FRONTEND: noninteractive
+
 jobs:
   build:
     runs-on: ubuntu-20.04
@@ -47,7 +50,6 @@ jobs:
       run: |
         ln -s /workdir/toolchain/brcm-arm-hnd /opt/toolchains
         echo "export LD_LIBRARY_PATH=$LD_LIBRARY:/opt/toolchains/crosstools-arm-gcc-9.2-linux-4.19-glibc-2.30-binutils-2.32/usr/lib" >> ~/.profile
-        echo "export TOOLCHAIN_BASE=/opt/toolchains" >> ~/.profile
         echo "PATH=\$PATH:/opt/toolchains/crosstools-arm-gcc-9.2-linux-4.19-glibc-2.30-binutils-2.32/usr/bin" >> ~/.profile
         echo "PATH=\$PATH:/opt/toolchains/crosstools-aarch64-gcc-9.2-linux-4.19-glibc-2.30-binutils-2.32/usr/bin" >> ~/.profile
 
