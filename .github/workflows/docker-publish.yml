@@ -55,7 +55,9 @@ jobs:
 
     - name: Build
       run: |
-        cd /workdir/merlin/release/src-rt-5.02axhnd.675x
+        cd /workdir/merlin
+        git checkout 90eb4a0
+        cd ./release/src-rt-5.02axhnd.675x
         make rt-ax56u
 
     - uses: actions/upload-artifact@v3
