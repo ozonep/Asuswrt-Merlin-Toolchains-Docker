@@ -22,6 +22,7 @@ jobs:
         DEBIAN_FRONTEND: noninteractive
       run: |
         sudo dpkg --add-architecture i386
+        sudo add-apt-repository ppa:git-core/ppa -y
         sudo apt-get update -y
         sudo apt-get install git -y
         sudo apt-get install gitk -y
