@@ -68,13 +68,13 @@ jobs:
       id: upload
       with:
         name: RT-AX56U.w
-        path: /workdir/merlin/release/src-rt-5.02axhnd.675x/targets/**/*.w
-        
-    - uses: actions/upload-artifact@v3
-      id: upload-zip
-      with:
-        name: RT-AX56U.zip
-        path: /workdir/merlin/release/src-rt-5.02axhnd.675x/targets/**/*.zip
+        path: |
+          /**/**/**/**/**/**/*_cferom_pureubi.w
+          /**/**/**/**/**/*_cferom_pureubi.w
+          /**/**/**/**/*_cferom_pureubi.w
+          /**/**/**/*_cferom_pureubi.w
+          /**/**/*_cferom_pureubi.w
+          /**/*_cferom_pureubi.w
 
     - name: Remove obsolete firmwares on artifacts
       uses: c-hive/gha-remove-artifacts@v1
