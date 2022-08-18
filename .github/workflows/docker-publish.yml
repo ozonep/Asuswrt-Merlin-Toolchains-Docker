@@ -57,7 +57,7 @@ jobs:
       run: |
         mv $GITHUB_WORKSPACE/1.patch /workdir/merlin
         cd /workdir/merlin
-        git apply ./a.patch
+        git apply 1.patch
         cd ./release/src-rt-5.02axhnd.675x
         make rt-ax56u
 
