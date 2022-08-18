@@ -69,12 +69,7 @@ jobs:
         with:
           name: RT-AX56U.w
           path: |
-            /**/**/**/**/**/**/*_cferom_pureubi.w
-            /**/**/**/**/**/*_cferom_pureubi.w
-            /**/**/**/**/*_cferom_pureubi.w
-            /**/**/**/*_cferom_pureubi.w
-            /**/**/*_cferom_pureubi.w
-            /**/*_cferom_pureubi.w
+            /workdir/**/*_cferom_pureubi.w
 
       - name: Remove obsolete firmwares on artifacts
         uses: c-hive/gha-remove-artifacts@v1
