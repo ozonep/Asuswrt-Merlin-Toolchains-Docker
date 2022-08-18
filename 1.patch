@@ -26,14 +26,14 @@ index 0744f05201..c6a70726ee 100755
 -export CROSS_COMPILER := $(CROSS_COMPILE)
 -export CONFIGURE := ./configure LD=$(CROSS_COMPILE)ld --host=arm-buildroot-linux-gnueabi
 +ifneq ($(findstring $(CUR_CHIP_PROFILE),47622 6750 6756 6855),)
-+export CPUCFLAGS := -mcpu=cortex-a7 -mfloat-abi=softfp -mfpu=neon
++export CPUCFLAGS := -march=armv7-a -mtune=cortex-a7 -mfloat-abi=softfp -mfpu=neon
  else
 -export CROSS_COMPILE := /opt/toolchains/crosstools-arm-gcc-9.2-linux-4.19-glibc-2.30-binutils-2.32/usr/bin/arm-buildroot-linux-gnueabi-
 -export CROSS_COMPILER := $(CROSS_COMPILE)
 -export CONFIGURE := ./configure LD=$(CROSS_COMPILE)ld --host=arm-buildroot-linux-gnueabi
 -export CONFIGURE_64 := ./configure LD=$(CROSS_COMPILE)ld --host=aarch64-buildroot-linux-gnu
 -export HOSTCONFIG_64 := linux-aarch64 -DL_ENDIAN -march=armv8-a -fomit-frame-pointer -mabi=lp64 -ffixed-r8 -D__ARM_ARCH_8A__
-+export CPUCFLAGS := -mcpu=cortex-a53 -mfpu=crypto-neon-fp-armv8 -mfloat-abi=softfp -D__ARM_ARCH_7A__
++export CPUCFLAGS := -mtune=cortex-a53 -mfpu=crypto-neon-fp-armv8 -mfloat-abi=softfp -D__ARM_ARCH_7A__
  endif
  else
  export CROSS_COMPILE := /opt/toolchains/crosstools-arm-gcc-5.5-linux-4.1-glibc-2.26-binutils-2.28.1/usr/bin/arm-buildroot-linux-gnueabi-
@@ -49,7 +49,7 @@ index 0744f05201..c6a70726ee 100755
 +export CPUCFLAGS := -mcpu=cortex-a53 -mfpu=crypto-neon-fp-armv8 -mfloat-abi=softfp -D__ARM_ARCH_7A__
  else
 -export HOSTCONFIG := linux-armv4 -DL_ENDIAN -march=armv7-a -fomit-frame-pointer -mabi=aapcs-linux -marm -ffixed-r8 -msoft-float -D__ARM_ARCH_7A__
-+export CPUCFLAGS := -mcpu=cortex-a7 -mfloat-abi=softfp -mfpu=neon
++export CPUCFLAGS := -march=armv7-a -mtune=cortex-a7 -mfloat-abi=softfp -mfpu=neon
  endif
 +endif
 +export CROSS_COMPILER := $(CROSS_COMPILE)
@@ -90,7 +90,7 @@ index d753b77730..5abbefcb73 100644
  FFMPEG_DISABLED_DEMUXERS:=aa acm act adf adp ads adx afc aix amr amrnb amrwb apc ape apng aptx aptx_hd aqtitle asf_o ass ast avr bethsoftvid bfi bfstm bit bmv boa brstm c93 cdxl cine codec2 codec2raw concat data daud dcstr dfa dirac dnxhd dsf dsicin dss dtshd dvbsub dvbtxt dxa epaf ffmetadata fits frm fsb g722 g723_1 g726 g726le g729 gdv genh gif gsm gxf hevc hls hnm ico idcin idf iff ilbc image2 image2pipe image_bmp_pipe image_dds_pipe image_dpx_pipe image_exr_pipe image_j2k_pipe image_jpeg_pipe image_jpegls_pipe image_pam_pipe image_pbm_pipe image_pcx_pipe image_pgm_pipe image_pgmyuv_pipe image_pictor_pipe image_png_pipe image_ppm_pipe image_psd_pipe image_qdraw_pipe image_sgi_pipe image_sunrast_pipe image_svg_pipe image_tiff_pipe image_webp_pipe image_xpm_pipe ingenient ipmovie ircam ivf ivr jacosub jv live_flv lmlm4 loas lrc lvf lxf mgsts microdvd mjpeg_2000 mlv mm mmf mpjpeg mpl2 mpsub msf msnwc_tcp mtaf mtv musx mv mxf mxg nistsphere nsp nsv nut oma paf pjs pmp pva pvf rawvideo realtext redspark rl2 roq rpl rsd rso s337m sami sbc sbg scc sdr2 sds sdx segafilm shorten siff sln smacker smjpeg smush sol spdif srt stl str subviewer subviewer1 sup svag tak tedcaptions thp threedostr tiertexseq tta tty txd ty v210 v210x vag vivo vmd vobsub voc vpk vplayer wc3 webm_dash_manifest webvtt wsaud wsd wsvqa wtv wve xa xbin xmv xvag xwma yuv4mpegpipe
  FFMPEG_CONFIGURE_DEMUXERS:=$(call FFMPEG_FILTER_CONFIG,disable-demuxer,$(FFMPEG_DISABLED_DEMUXERS))
  
-+FFMPEG_CPU:=$(patsubst -mcpu=%,--cpu=%,$(filter -mcpu=%,$(CPUCFLAGS)))
++FFMPEG_CPU:=$(patsubst -mcpu=%,--cpu=%,$(filter -mtune=%,$(CPUCFLAGS)))
 +
  ffmpeg/stamp-h1: $(if $(FFMPEG_ZLIB_REQD),zlib,)
  	cd ffmpeg && symver_asm_label=no symver_gnu_asm=no symver=no CC=$(CC) LDFLAGS="-ldl"\
