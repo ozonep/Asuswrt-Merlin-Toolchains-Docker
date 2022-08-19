@@ -13,7 +13,7 @@ index de2f353800..b05076154a 100644
  endif
  else
 -BRCM_COMMON_CFLAGS := -Os -march=armv7-a -fomit-frame-pointer -mno-thumb-interwork -mabi=aapcs-linux -marm -fno-common -ffixed-r8 -msoft-float -D__ARM_ARCH_7A__ $(BRCM_WERROR_CFLAGS)
-+BRCM_COMMON_CFLAGS := -Os -march=armv7-a -mtune=cortex-a7 -mfloat-abi=softfp -mfpu=neon-vfpv4 -fomit-frame-pointer -mno-thumb-interwork -mabi=aapcs-linux -marm -fno-common -ffixed-r8 -D__ARM_ARCH_7A__ $(BRCM_WERROR_CFLAGS)
++BRCM_COMMON_CFLAGS := -Os -march=armv7ve -mtune=cortex-a7 -mfloat-abi=softfp -mfpu=neon-vfpv4 -fomit-frame-pointer -mno-thumb-interwork -mabi=aapcs-linux -marm -fno-common -ffixed-r8 -D__ARM_ARCH_7A__ $(BRCM_WERROR_CFLAGS)
  endif
  #for mips' -mno-shared (do not generate posistion independent code), arm is -mno-apcs-reentrant which is the default
  ifeq ($(CMS_MEM_LEAK_TRACING),y)
