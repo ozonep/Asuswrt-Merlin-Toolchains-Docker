@@ -26,7 +26,7 @@ index 0744f05201..c6a70726ee 100755
 -export CROSS_COMPILER := $(CROSS_COMPILE)
 -export CONFIGURE := ./configure LD=$(CROSS_COMPILE)ld --host=arm-buildroot-linux-gnueabi
 +ifneq ($(findstring $(CUR_CHIP_PROFILE),47622 6750 6756 6855),)
-+export CPUCFLAGS := -march=armv7-a -mtune=cortex-a7 -mfloat-abi=softfp -mfpu=neon-vfpv4
++export CPUCFLAGS := -march=armv7ve -mtune=cortex-a7 -mfloat-abi=softfp -mfpu=neon-vfpv4
  else
 -export CROSS_COMPILE := /opt/toolchains/crosstools-arm-gcc-9.2-linux-4.19-glibc-2.30-binutils-2.32/usr/bin/arm-buildroot-linux-gnueabi-
 -export CROSS_COMPILER := $(CROSS_COMPILE)
@@ -49,7 +49,7 @@ index 0744f05201..c6a70726ee 100755
 +export CPUCFLAGS := -mcpu=cortex-a53 -mfpu=crypto-neon-fp-armv8 -mfloat-abi=softfp -D__ARM_ARCH_7A__
  else
 -export HOSTCONFIG := linux-armv4 -DL_ENDIAN -march=armv7-a -fomit-frame-pointer -mabi=aapcs-linux -marm -ffixed-r8 -msoft-float -D__ARM_ARCH_7A__
-+export CPUCFLAGS := -march=armv7-a -mtune=cortex-a7 -mfloat-abi=softfp -mfpu=neon-vfpv4
++export CPUCFLAGS := -march=armv7ve -mtune=cortex-a7 -mfloat-abi=softfp -mfpu=neon-vfpv4
  endif
 +endif
 +export CROSS_COMPILER := $(CROSS_COMPILE)
