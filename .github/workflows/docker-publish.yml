@@ -11,6 +11,7 @@ env:
   TZ: Europe/Copenhagen
   TOOLCHAIN_BASE: /opt/toolchains
   DEBIAN_FRONTEND: noninteractive
+  LANG: C.UTF-8
 
 jobs:
   build:
@@ -44,8 +45,8 @@ jobs:
       - name: Clone source code
         working-directory: /workdir
         run: |
-          git clone --depth=1 https://github.com/RMerl/am-toolchains toolchain
-          git clone --branch=386.7_2 https://github.com/RMerl/asuswrt-merlin.ng merlin
+          git clone --depth=1 https://github.com/SylphiaWindy/am-toolchains toolchain
+          git clone --branch=master https://github.com/RMerl/asuswrt-merlin.ng merlin
 
       - name: Setting up toolchains
         run: |
@@ -56,11 +57,11 @@ jobs:
 
       - name: Build
         run: |
-          mv $GITHUB_WORKSPACE/1.patch /workdir/merlin
-          mv $GITHUB_WORKSPACE/2.patch /workdir/merlin
+          # mv $GITHUB_WORKSPACE/1.patch /workdir/merlin
+          # mv $GITHUB_WORKSPACE/2.patch /workdir/merlin
           cd /workdir/merlin
-          git apply 1.patch
-          git apply 2.patch
+          # git apply 1.patch
+          # git apply 2.patch
           cd ./release/src-rt-5.02axhnd.675x
           make rt-ax56u
 
