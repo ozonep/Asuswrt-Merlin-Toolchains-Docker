@@ -1,11 +1,9 @@
 name: Build Asuswrt
 
 on:
-  workflow_dispatch:
-    inputs:
-      trigger:
-        description: "Manually trigger"
-        required: false
+  push:
+    branches:
+      - 'Ubuntu-20_04'
 
 env:
   TZ: Europe/Copenhagen
@@ -64,11 +62,11 @@ jobs:
           mv $GITHUB_WORKSPACE/openssl.patch /workdir/merlin
           cd /workdir/merlin
           git checkout 735e2a8a337c554f51f7ddc004699122f540a858
-          git apply dummy.patch
-          git apply dropbear.patch
-          git apply dnsmasq.patch
-          git apply openssl.patch
-          git apply 0001.patch
+          git apply --whitespace=fix ./dummy.patch
+          git apply --whitespace=fix ./dropbear.patch
+          git apply --whitespace=fix ./dnsmasq.patch
+          git apply --whitespace=fix ./openssl.patch
+          git apply --whitespace=fix ./0001.patch
           cd ./release/src-rt-5.02axhnd.675x
           make rt-ax56u
 
@@ -77,9 +75,4 @@ jobs:
         with:
           name: RT-AX56U.w
           path: /workdir/merlin/release/src-rt-5.02axhnd.675x/targets/**/*_cferom_pureubi.w
-
-      - name: Remove obsolete firmwares on artifacts
-        uses: c-hive/gha-remove-artifacts@v1
-        with:
-          age: "1 month"
-          skip-recent: 2
+          if-no-files-found: error
