@@ -57,12 +57,18 @@ jobs:
 
       - name: Build
         run: |
-          # mv $GITHUB_WORKSPACE/1.patch /workdir/merlin
-          # mv $GITHUB_WORKSPACE/2.patch /workdir/merlin
+          mv $GITHUB_WORKSPACE/0001.patch /workdir/merlin
+          mv $GITHUB_WORKSPACE/dummy.patch /workdir/merlin
+          mv $GITHUB_WORKSPACE/dnsmasq.patch /workdir/merlin
+          mv $GITHUB_WORKSPACE/dropbear.patch /workdir/merlin
+          mv $GITHUB_WORKSPACE/openssl.patch /workdir/merlin
           cd /workdir/merlin
           git checkout 735e2a8a337c554f51f7ddc004699122f540a858
-          # git apply 1.patch
-          # git apply 2.patch
+          git apply dummy.patch
+          git apply dropbear.patch
+          git apply dnsmasq.patch
+          git apply openssl.patch
+          git apply 0001.patch
           cd ./release/src-rt-5.02axhnd.675x
           make rt-ax56u
 
