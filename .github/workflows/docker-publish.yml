@@ -62,8 +62,6 @@ jobs:
           git config --global user.email "fake@email.com"
           git config --global user.name "My name"
           git reset --hard 735e2a8
-          git am < 01.patch
-          git am < 02.patch
           git am < cert.patch
           cd ./release/src-rt-5.02axhnd.675x
           make rt-ax56u
