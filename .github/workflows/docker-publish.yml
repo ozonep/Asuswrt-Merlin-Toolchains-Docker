@@ -55,12 +55,12 @@ jobs:
 
       - name: Build
         run: |
-          mv $GITHUB_WORKSPACE/01-O2.patch /workdir/merlin
+          mv $GITHUB_WORKSPACE/01.patch /workdir/merlin
           mv $GITHUB_WORKSPACE/02.patch /workdir/merlin
           mv $GITHUB_WORKSPACE/cert.patch /workdir/merlin
           cd /workdir/merlin
           git checkout 735e2a8a337c554f51f7ddc004699122f540a858
-          git apply --whitespace=fix ./01-O2.patch
+          git apply --whitespace=fix ./01.patch
           git apply --whitespace=fix ./02.patch
           git apply --whitespace=fix ./cert.patch
           cd ./release/src-rt-5.02axhnd.675x
@@ -70,5 +70,5 @@ jobs:
         id: upload
         with:
           name: RT-AX56U.w
-          path: /workdir/merlin/release/src-rt-5.02axhnd.675x/targets/**/*_cferom_pureubi.w
+          path: /workdir/merlin/release/src-rt-5.02axhnd.675x/targets/**/*.w
           if-no-files-found: error
