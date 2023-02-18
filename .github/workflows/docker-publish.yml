@@ -66,8 +66,8 @@ jobs:
           git apply --whitespace=fix ./dummy.patch
           git apply --whitespace=fix ./dropbear.patch
           git apply --whitespace=fix ./memory.patch
-          # git apply --whitespace=fix ./dnsmasq.patch
-          # git apply --whitespace=fix ./openssl.patch
+          git apply --whitespace=fix ./dnsmasq.patch
+          git apply --whitespace=fix ./openssl.patch
           git apply --whitespace=fix ./0001.patch
           cd ./release/src-rt-5.02axhnd.675x
           make rt-ax56u
