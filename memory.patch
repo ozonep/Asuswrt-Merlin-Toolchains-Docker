@@ -1,0 +1,287 @@
+From 4c4da17e4be9830efd68c82af4102579b34e0f2d Mon Sep 17 00:00:00 2001
+From: Kevin Bracey <kevin@bracey.fi>
+Date: Sun, 9 Jan 2022 14:20:15 +0200
+Subject: [PATCH] Improve memory displays
+
+Separate out cache memory from the memory displays, avoiding
+confusion.
+
+In the router status, "free" is changed from being MemFree to being
+(MemFree + Cached - Shmem + SReclaimable + Buffers), so it includes
+probably-claimable memory.  This is equivalent to htop's cache + buffers
++ free. "Used" is then physical total minus that, equivalent to htop's
+used + shared, plus the reserved memory not counted in Linux's total.
+
+In the Tools, existing fields are left as-is, but new "Used" and
+"Available" rows are added. "Used" is equivalent to htop's used +
+shared, so matches the router status display, except that we're not
+including reserved memory. "Available" is the kernel's MemAvailable
+value - a good high-level space available indication.
+---
+ release/src/router/httpd/sysinfo.c            | 84 ++++++++++++++++---
+ release/src/router/httpd/sysinfo.h            | 20 +++++
+ release/src/router/httpd/web.c                | 20 ++---
+ release/src/router/www/Tools_Sysinfo.asp      | 12 +++
+ release/src/router/www/ajax_sysinfo.asp       |  3 +-
+ .../router/www/device-map/router_status.asp   |  8 +-
+ 6 files changed, 120 insertions(+), 27 deletions(-)
+
+diff --git a/release/src/router/httpd/sysinfo.c b/release/src/router/httpd/sysinfo.c
+index 70db0b75440..f60a3a5fb5a 100644
+--- a/release/src/router/httpd/sysinfo.c
++++ b/release/src/router/httpd/sysinfo.c
+@@ -108,6 +108,66 @@ void GetPhyStatus_rtk(int *states);
+ #define SI_WL_QUERY_AUTHE 2
+ #define SI_WL_QUERY_AUTHO 3
+ 
++static const char * const meminfo_name[MI_MAX] =
++{
++	[MI_MemTotal] = "MemTotal",
++	[MI_MemFree] = "MemFree",
++	[MI_MemAvailable] = "MemAvailable",
++	[MI_Buffers] = "Buffers",
++	[MI_Cached] = "Cached",
++	[MI_SwapCached] = "SwapCached",
++	[MI_SwapTotal] = "SwapTotal",
++	[MI_SwapFree] = "SwapFree",
++	[MI_Shmem] = "Shmem",
++	[MI_SReclaimable] = "SReclaimable"
++};
++
++void read_meminfo(meminfo_t *m)
++{
++	FILE *f;
++	char field[64];
++	int i, size;
++
++	for (i = 0; i < MI_MAX; i++) {
++		(*m)[i] = -1;
++	}
++
++	f = fopen("/proc/meminfo", "r");
++	if (!f)
++		return;
++
++	while (fscanf(f, " %63[^:]: %d kB", field, &size) == 2) {
++		for (i = 0; i < MI_MAX; i++) {
++			if (strcmp(field, meminfo_name[i]) == 0) {
++				(*m)[i] = size;
++				break;
++			}
++		}
++	}
++
++	fclose(f);
++}
++
++int meminfo_compute_simple_free(const meminfo_t *m)
++{
++	// Compute a simple free memory number similarly to htop -
++	// this corresponds to its "cached" + "buffered" + "free"
++	// Total minus this is then its "used" + "shared"
++	int mfree = (*m)[MI_MemFree] + (*m)[MI_Cached] - (*m)[MI_Shmem] + (*m)[MI_SReclaimable] + (*m)[MI_Buffers];
++	// In case something goes out-of-range with that calculation, use the basic free number
++	if (mfree < 0 || mfree > (*m)[MI_MemTotal])
++		mfree = (*m)[MI_MemFree];
++	return mfree;
++}
++
++static void write_kb_or_qq(char *result, int size)
++{
++	if (size >= 0) {
++		sprintf(result, "%.2f", (size / (float)KBYTES));
++	} else {
++		strcpy(result, "??");
++	}
++}
+ 
+ int ej_show_sysinfo(int eid, webs_t wp, int argc, char_t ** argv)
+ {
+@@ -115,6 +175,7 @@ int ej_show_sysinfo(int eid, webs_t wp, int argc, char_t ** argv)
+ 	char result[2048];
+ 	int retval = 0;
+ 	struct sysinfo sys;
++	meminfo_t mem;
+ 	char *tmp;
+ 
+ 	strcpy(result,"None");
+@@ -223,18 +284,17 @@ int ej_show_sysinfo(int eid, webs_t wp, int argc, char_t ** argv)
+ 			sysinfo(&sys);
+ 			sprintf(result,"%.2f",((sys.totalswap - sys.freeswap) * sys.mem_unit / (float)MBYTES));
+ 		} else if(strcmp(type,"memory.cache") == 0) {
+-			int size = 0;
+-			char *buffer = read_whole_file("/proc/meminfo");
+-
+-			if (buffer) {
+-				tmp = strstr(buffer, "Cached");
+-				if (tmp)
+-					sscanf(tmp, "Cached:            %d kB\n", &size);
+-				free(buffer);
+-				sprintf(result,"%.2f", (size / (float)KBYTES));
+-			} else {
+-				strcpy(result,"??");
+-			}
++			read_meminfo(&mem);
++			write_kb_or_qq(result, mem[MI_Cached]);
++		} else if(strcmp(type,"memory.available") == 0) {
++			read_meminfo(&mem);
++			write_kb_or_qq(result, mem[MI_MemAvailable]);
++		} else if(strcmp(type,"memory.simple.free") == 0) {
++			read_meminfo(&mem);
++			write_kb_or_qq(result, meminfo_compute_simple_free(&mem));
++		} else if(strcmp(type,"memory.simple.used") == 0) {
++			read_meminfo(&mem);
++			write_kb_or_qq(result, mem[MI_MemTotal] - meminfo_compute_simple_free(&mem));
+ 		} else if(strcmp(type,"cpu.load.1") == 0) {
+ 			sysinfo(&sys);
+ 			sprintf(result,"%.2f",(sys.loads[0] / (float)(1<<SI_LOAD_SHIFT)));
+diff --git a/release/src/router/httpd/sysinfo.h b/release/src/router/httpd/sysinfo.h
+index aea5694a6e9..52e35a1328d 100644
+--- a/release/src/router/httpd/sysinfo.h
++++ b/release/src/router/httpd/sysinfo.h
+@@ -16,3 +16,23 @@
+  */
+ 
+ extern int ej_show_sysinfo(int eid, webs_t wp, int argc, char_t **argv);
++
++enum
++{
++	MI_MemTotal,
++	MI_MemFree,
++	MI_MemAvailable,
++	MI_Buffers,
++	MI_Cached,
++	MI_SwapCached,
++	MI_SwapTotal,
++	MI_SwapFree,
++	MI_Shmem,
++	MI_SReclaimable,
++	MI_MAX
++};
++
++typedef int meminfo_t[MI_MAX];
++
++void read_meminfo(meminfo_t *m);
++int meminfo_compute_simple_free(const meminfo_t *m);
+diff --git a/release/src/router/httpd/web.c b/release/src/router/httpd/web.c
+index fa984ed1aa3..9313da39e72 100644
+--- a/release/src/router/httpd/web.c
++++ b/release/src/router/httpd/web.c
+@@ -25374,6 +25374,7 @@ ej_sysinfo(int eid, webs_t wp, int argc, char_t **argv)
+ static int
+ ej_memory_usage(int eid, webs_t wp, int argc, char_t **argv){
+ 	unsigned long total, used, mfree  /*, shared, buffers, cached, driver occupied*/;
++	unsigned long sused, sfree;
+ 	char buf[80];
+ 	int from_app = 0, i = 0;
+ 	int memSize[] = {4,8,16,32,64,128,256,512,1024};
+@@ -25381,15 +25382,13 @@ ej_memory_usage(int eid, webs_t wp, int argc, char_t **argv){
+ 	unsigned long  maxSize = 0, currentSize = 0;
+ 
+ 	from_app = check_user_agent(user_agent);
+-	FILE *fp = NULL;
+-	fp = fopen("/proc/meminfo", "r");
+-
+-	if(fp == NULL)
++	meminfo_t mem;
++	read_meminfo(&mem);
++	total = mem[MI_MemTotal];
++	if(total < 0)
+ 		return -1;
+-
+-	fscanf(fp, "MemTotal: %lu %s\n", &total, buf);
+-	fscanf(fp, "MemFree: %lu %s\n", &mfree, buf);
+-	fclose(fp);
++	mfree = mem[MI_MemFree];
++	sfree = meminfo_compute_simple_free(&mem);
+ 
+ 	for(i=0;i<length;i++){
+ 		currentSize = memSize[i]*1024;
+@@ -25400,10 +25399,11 @@ ej_memory_usage(int eid, webs_t wp, int argc, char_t **argv){
+ 	}
+ 
+ 	used = maxSize - mfree;	// (maxSize - total) + (total -mfree)
++	sused = maxSize - sfree;
+ 	if(from_app == 0){
+-		websWrite(wp, "{\"total\":\"%lu\",\"free\":\"%lu\",\"used\":\"%lu\"}", maxSize, mfree, used);
++		websWrite(wp, "{\"total\":\"%lu\",\"free\":\"%lu\",\"used\":\"%lu\",\"simple_free\":\"%lu\",\"simple_used\":\"%lu\"}", maxSize, mfree, used, sfree, sused);
+ 	}else{
+-		websWrite(wp, "\"mem_total\":\"%lu\",\"mem_free\":\"%lu\",\"mem_used\":\"%lu\"", maxSize, mfree, used);
++		websWrite(wp, "\"mem_total\":\"%lu\",\"mem_free\":\"%lu\",\"mem_used\":\"%lu\",\"simple_free\":\"%lu\",\"simple_used\":\"%lu\"", maxSize, mfree, used, sfree, sused);
+ 	}
+ 
+ 	return 0;
+diff --git a/release/src/router/www/Tools_Sysinfo.asp b/release/src/router/www/Tools_Sysinfo.asp
+index ca66d6c354d..df3eaafbcf2 100644
+--- a/release/src/router/www/Tools_Sysinfo.asp
++++ b/release/src/router/www/Tools_Sysinfo.asp
+@@ -409,6 +409,8 @@ function show_connstate(){
+ function show_memcpu(){
+ 	document.getElementById("cpu_stats_td").innerHTML = cpu_stats_arr[0] + ", " + cpu_stats_arr[1] + ", " + cpu_stats_arr[2];
+ 	document.getElementById("mem_total_td").innerHTML = mem_stats_arr[0] + " MB";
++	document.getElementById("mem_used_td").innerHTML = mem_stats_arr[8] + " MB";
++	document.getElementById("mem_available_td").innerHTML = mem_stats_arr[9] + " MB";
+ 	document.getElementById("mem_free_td").innerHTML = mem_stats_arr[1] + " MB";
+ 	document.getElementById("mem_buffer_td").innerHTML = mem_stats_arr[2] + " MB";
+ 	document.getElementById("mem_cache_td").innerHTML = mem_stats_arr[3] + " MB";
+@@ -590,6 +592,16 @@ function show_wifi_version() {
+ 						<td id="mem_total_td"></td>
+ 					</tr>
+ 
++					<tr>
++						<th>Used</th>
++						<td id="mem_used_td"></td>
++					</tr>
++
++					<tr>
++						<th>Available</th>
++						<td id="mem_available_td"></td>
++					</tr>
++
+ 					<tr>
+ 						<th>Free</th>
+ 						<td id="mem_free_td"></td>
+diff --git a/release/src/router/www/ajax_sysinfo.asp b/release/src/router/www/ajax_sysinfo.asp
+index f9bdf45a874..6e777c02de3 100644
+--- a/release/src/router/www/ajax_sysinfo.asp
++++ b/release/src/router/www/ajax_sysinfo.asp
+@@ -10,6 +10,7 @@ conn_stats_arr = ["<% sysinfo("conn.total"); %>","<% sysinfo("conn.active"); %>"
+ 
+ mem_stats_arr = ["<% sysinfo("memory.total"); %>",  "<% sysinfo("memory.free"); %>", "<% sysinfo("memory.buffer"); %>", 
+                  "<% sysinfo("memory.cache"); %>", "<% sysinfo("memory.swap.used"); %>", "<% sysinfo("memory.swap.total"); %>",
+-	         "<% sysinfo("nvram.used"); %>", "<% sysinfo("jffs.usage"); %>"];
++	         "<% sysinfo("nvram.used"); %>", "<% sysinfo("jffs.usage"); %>",
++	         "<% sysinfo("memory.simple.used"); %>", "<% sysinfo("memory.available"); %>"];
+ 
+ cpu_stats_arr = ["<% sysinfo("cpu.load.1"); %>", "<% sysinfo("cpu.load.5"); %>", "<% sysinfo("cpu.load.15"); %>"];
+diff --git a/release/src/router/www/device-map/router_status.asp b/release/src/router/www/device-map/router_status.asp
+index 0e8b67c28a7..35c8a5d58d8 100755
+--- a/release/src/router/www/device-map/router_status.asp
++++ b/release/src/router/www/device-map/router_status.asp
+@@ -334,7 +334,7 @@ function detect_CPU_RAM(){
+ 		require(['/require/modules/makeRequest.js'], function(makeRequest){
+ 			makeRequest.start('/cpu_ram_status.asp', function(xhr){				
+ 				render_CPU(cpuInfo);
+-				render_RAM(memInfo.total, memInfo.free, memInfo.used);
++				render_RAM(memInfo);
+ 				setTimeout("detect_CPU_RAM();", 2000);
+ 			}, function(){});
+ 		});
+@@ -374,14 +374,14 @@ function detect_CPU_RAM(){
+ 					var pt = "";
+ 					var used_percentage = total_MB = free_MB = used_MB = 0;
+ 					total_MB = Math.round(memory.total/1024);
+-					free_MB = Math.round(memory.free/1024);
+-					used_MB = Math.round(memory.used/1024);
++					free_MB = Math.round(memory.simple_free/1024);
++					used_MB = Math.round(memory.simple_used/1024);
+ 					
+ 					$("#ram_total_info").html(total_MB + " MB");
+ 					$("#ram_free_info").html(free_MB + " MB");
+ 					$("#ram_used_info").html(used_MB + " MB");
+ 
+-					used_percentage = Math.round((memory.used/memory.total)*100);
++					used_percentage = Math.round((used_MB/total_MB)*100);
+ 					$("#ram_bar").css("width", used_percentage + "%");
+ 					$("#ram_quantification").html(used_percentage + "%");
+ 					ram_usage_array.push(100 - used_percentage);

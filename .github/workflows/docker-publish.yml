@@ -60,10 +60,12 @@ jobs:
           mv $GITHUB_WORKSPACE/dnsmasq.patch /workdir/merlin
           mv $GITHUB_WORKSPACE/dropbear.patch /workdir/merlin
           mv $GITHUB_WORKSPACE/openssl.patch /workdir/merlin
+          mv $GITHUB_WORKSPACE/memory.patch /workdir/merlin
           cd /workdir/merlin
           git checkout 735e2a8a337c554f51f7ddc004699122f540a858
           git apply --whitespace=fix ./dummy.patch
           git apply --whitespace=fix ./dropbear.patch
+          git apply --whitespace=fix ./memory.patch
           # git apply --whitespace=fix ./dnsmasq.patch
           # git apply --whitespace=fix ./openssl.patch
           git apply --whitespace=fix ./0001.patch
