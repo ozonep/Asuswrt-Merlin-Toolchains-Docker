@@ -1,9 +1,19 @@
-From 2287564d8d7ee07fcab8f5bc16a43e5a3b2ce6c4 Mon Sep 17 00:00:00 2001
-From: Eric Sauvageau <merlin@asuswrt-merlin.net>
-Date: Mon, 13 Feb 2023 10:08:15 -0500
-Subject: [PATCH] openssl: updated to 1.1.1t
+From 7de91f5fe93445e3e5c640f765f2e19e7bbd1430 Mon Sep 17 00:00:00 2001
+From: Ivan Malkov <ozonep@yandex.ru>
+Date: Sat, 18 Feb 2023 09:59:26 +0100
+Subject: [PATCH] Commits from upstream
 
 ---
+ .../private/libs/wlcsm/include/.dummy         |   0
+ release/src/router/dnsmasq/CHANGELOG          |  26 +-
+ release/src/router/dnsmasq/VERSION            |   2 +-
+ .../src/router/dnsmasq/dnsmasq.conf.example   |   2 +-
+ release/src/router/dnsmasq/man/dnsmasq.8      |  23 +-
+ release/src/router/dnsmasq/src/cache.c        | 201 +++---
+ release/src/router/dnsmasq/src/dnsmasq.h      |   3 +-
+ release/src/router/dnsmasq/src/option.c       |  37 +-
+ release/src/router/dropbear/sysoptions.h      |   2 +
+ release/src/router/dropbear/sysoptions.h.orig | 397 +++++++++++
  release/src/router/openssl-1.1/CHANGES        |  76 ++-
  release/src/router/openssl-1.1/Configure      |  18 +-
  release/src/router/openssl-1.1/NEWS           |   7 +
@@ -51,12 +61,922 @@ Subject: [PATCH] openssl: updated to 1.1.1t
  .../src/router/openssl-1.1/test/test_test.c   | 398 ++++++------
  .../router/openssl-1.1/test/testutil/driver.c |   4 +-
  .../src/router/openssl-1.1/test/v3nametest.c  |  10 +-
- 47 files changed, 1545 insertions(+), 338 deletions(-)
+ 57 files changed, 2114 insertions(+), 462 deletions(-)
+ create mode 100644 release/src-rt-5.04axhnd.675x/userspace/private/libs/wlcsm/include/.dummy
+ create mode 100644 release/src/router/dropbear/sysoptions.h.orig
  create mode 100644 release/src/router/openssl-1.1/crypto/bn/rsa_sup_mul.c
  create mode 100644 release/src/router/openssl-1.1/test/smime-certs/badrsa.pem
 
+diff --git a/release/src-rt-5.04axhnd.675x/userspace/private/libs/wlcsm/include/.dummy b/release/src-rt-5.04axhnd.675x/userspace/private/libs/wlcsm/include/.dummy
+new file mode 100644
+index 0000000000..e69de29bb2
+diff --git a/release/src/router/dnsmasq/CHANGELOG b/release/src/router/dnsmasq/CHANGELOG
+index 0f36a0f866..de9c5e0b06 100644
+--- a/release/src/router/dnsmasq/CHANGELOG
++++ b/release/src/router/dnsmasq/CHANGELOG
+@@ -1,7 +1,21 @@
++version 2.89
++        Fix bug introduced in 2.88 (commit fe91134b) which can result
++	in corruption of the DNS cache internal data structures and
++	logging of "cache internal error". This has only been seen
++	in one place in the wild, and it took considerable effort
++	to even generate a test case to reproduce it, but there's
++	no way to be sure it won't strike, and the effect is to break
++	the cache badly. Installations with DNSSEC enabled are more
++	likely to see the problem, but not running DNSSEC does not
++	guarantee that it won't happen. Thanks to Timo van Roermund
++	for reporting the bug and for his great efforts in chasing
++	it down.
++
++
+ version 2.88
+ 	Fix bug in --dynamic-host when an interface has /16 IPv4
+-	address. Thanks to Mark Dietzer for spotting this.
+-	
++  	address. Thanks to Mark Dietzer for spotting this.
++
+ 	Add --fast-dns-retry option. This gives dnsmasq the ability
+ 	to originate retries for upstream DNS queries itself, rather
+ 	than relying on the downstream client. This is most useful
+@@ -12,12 +26,18 @@ version 2.88
+ 	in the cache, but its time-to-live has expired, dnsmasq will
+ 	return the data anyway. (It attempts to refresh the
+ 	data with an upstream query after returning the stale data.)
+-	This can improve speed and reliability. It comes 
++	This can improve speed and reliability. It comes
+ 	at the expense of sometimes returning out-of-date data and
+ 	less efficient cache utilisation, since old data cannot be
+ 	flushed when its TTL expires, so the cache becomes
+ 	strictly least-recently-used.
+ 
++	Add --port-limit option which allows tuning for robustness in
++	the face of some upstream network errors. Thanks to
++	Prashant Kumar Singh, Ravi Nagayach and Mike Danilov,
++	all of Amazon Web Services, for their efforts in developing this
++	and the stale-cache and fast-retry options.
++
+ 	Make --hostsdir (but NOT --dhcp-hostsdir and --dhcp-optsdir)
+ 	handle removal of whole files or entries within files.
+ 	Thanks to Dominik Derigs for the initial patches for this.
+diff --git a/release/src/router/dnsmasq/VERSION b/release/src/router/dnsmasq/VERSION
+index 663ae72bcc..55a1cdef10 100644
+--- a/release/src/router/dnsmasq/VERSION
++++ b/release/src/router/dnsmasq/VERSION
+@@ -1 +1 @@
+-2.88
++2.89
+diff --git a/release/src/router/dnsmasq/dnsmasq.conf.example b/release/src/router/dnsmasq/dnsmasq.conf.example
+index 2047630802..0cbf572eb9 100644
+--- a/release/src/router/dnsmasq/dnsmasq.conf.example
++++ b/release/src/router/dnsmasq/dnsmasq.conf.example
+@@ -394,7 +394,7 @@
+ 
+ # The following DHCP options set up dnsmasq in the same way as is specified
+ # for the ISC dhcpcd in
+-# http://www.samba.org/samba/ftp/docs/textdocs/DHCP-Server-Configuration.txt
++# https://web.archive.org/web/20040313070105/http://us1.samba.org/samba/ftp/docs/textdocs/DHCP-Server-Configuration.txt
+ # adapted for a typical dnsmasq installation where the host running
+ # dnsmasq is also the host running samba.
+ # you may want to uncomment some or all of them if you use
+diff --git a/release/src/router/dnsmasq/man/dnsmasq.8 b/release/src/router/dnsmasq/man/dnsmasq.8
+index 2495ed1660..3d1d96a7ad 100644
+--- a/release/src/router/dnsmasq/man/dnsmasq.8
++++ b/release/src/router/dnsmasq/man/dnsmasq.8
+@@ -2215,6 +2215,20 @@ exit 0
+ 
+ and /share/ads-domains.gz containing a compressed
+ list of ad server domains will save disk space with large ad-server blocklists.
++.TP
++.B --no-ident
++Do not respond to class CHAOS and type TXT in domain bind queries.
++
++Without this option being set, the cache statistics are also available in the
++DNS as answers to queries of class CHAOS and type TXT in domain bind. The domain
++names are cachesize.bind, insertions.bind, evictions.bind, misses.bind,
++hits.bind, auth.bind and servers.bind unless disabled at compile-time. An
++example command to query this, using the
++.B dig
++utility would be
++
++dig +short chaos txt cachesize.bind
++
+ .SH CONFIG FILE
+ At startup, dnsmasq reads
+ .I /etc/dnsmasq.conf,
+@@ -2264,15 +2278,6 @@ resulted in an error. In
+ mode or when full logging is enabled (\fB--log-queries\fP), a complete dump of the
+ contents of the cache is made. 
+ 
+-The cache statistics are also available in the DNS as answers to 
+-queries of class CHAOS and type TXT in domain bind. The domain names are cachesize.bind, insertions.bind, evictions.bind, 
+-misses.bind, hits.bind, auth.bind and servers.bind. An example command to query this, using the 
+-.B dig
+-utility would be
+-
+-dig +short chaos txt cachesize.bind
+-
+-.PP 
+ When it receives SIGUSR2 and it is logging direct to a file (see
+ .B --log-facility
+ ) 
+diff --git a/release/src/router/dnsmasq/src/cache.c b/release/src/router/dnsmasq/src/cache.c
+index 8f73233f31..0a5fd1454e 100644
+--- a/release/src/router/dnsmasq/src/cache.c
++++ b/release/src/router/dnsmasq/src/cache.c
+@@ -28,6 +28,7 @@ static int bignames_left, hash_size;
+ static void make_non_terminals(struct crec *source);
+ static struct crec *really_insert(char *name, union all_addr *addr, unsigned short class,
+ 				  time_t now,  unsigned long ttl, unsigned int flags);
++static void dump_cache_entry(struct crec *cache, time_t now);
+ 
+ /* type->string mapping: this is also used by the name-hash function as a mixing table. */
+ /* taken from https://www.iana.org/assignments/dns-parameters/dns-parameters.xhtml */
+@@ -235,19 +236,23 @@ static void cache_hash(struct crec *crecp)
+ 
+   char *name = cache_get_name(crecp);
+   struct crec **up = hash_bucket(name);
+-
+-  if (!(crecp->flags & F_REVERSE))
++  unsigned int flags = crecp->flags & (F_IMMORTAL | F_REVERSE);
++  
++  if (!(flags & F_REVERSE))
+     {
+       while (*up && ((*up)->flags & F_REVERSE))
+ 	up = &((*up)->hash_next); 
+       
+-      if (crecp->flags & F_IMMORTAL)
++      if (flags & F_IMMORTAL)
+ 	while (*up && !((*up)->flags & F_IMMORTAL))
+ 	  up = &((*up)->hash_next);
+     }
+ 
+-  /* Preserve order when inserting the same name multiple times. */
+-  while (*up && hostname_isequal(cache_get_name(*up), name))
++  /* Preserve order when inserting the same name multiple times.
++     Do not mess up the flag invariants. */
++  while (*up &&
++	 hostname_isequal(cache_get_name(*up), name) &&
++	 flags == ((*up)->flags & (F_IMMORTAL | F_REVERSE)))
+     up = &((*up)->hash_next);
+   
+   crecp->hash_next = *up;
+@@ -594,7 +599,7 @@ static struct crec *really_insert(char *name, union all_addr *addr, unsigned sho
+   struct crec *new, *target_crec = NULL;
+   union bigname *big_name = NULL;
+   int freed_all = (flags & F_REVERSE);
+-  int free_avail = 0;
++  struct crec *free_avail = NULL;
+   unsigned int target_uid;
+   
+   /* if previous insertion failed give up now. */
+@@ -642,7 +647,7 @@ static struct crec *really_insert(char *name, union all_addr *addr, unsigned sho
+       
+       /* Free entry at end of LRU list, use it. */
+       if (!(new->flags & (F_FORWARD | F_REVERSE)))
+-	break;
++	break; 
+ 
+       /* End of LRU list is still in use: if we didn't scan all the hash
+ 	 chains for expired entries do that now. If we already tried that
+@@ -654,12 +659,9 @@ static struct crec *really_insert(char *name, union all_addr *addr, unsigned sho
+ 	 insert. Once in this state, all inserts will probably fail. */
+       if (free_avail)
+ 	{
+-	  static int warned = 0;
+-	  if (!warned)
+-	    {
+-	      my_syslog(LOG_ERR, _("Internal error in cache."));
+-	      warned = 1;
+-	    }
++	  my_syslog(LOG_ERR, _("Internal error in cache."));
++	  /* Log the entry we tried to delete. */
++	  dump_cache_entry(free_avail, now);
+ 	  insert_error = 1;
+ 	  return NULL;
+ 	}
+@@ -667,13 +669,13 @@ static struct crec *really_insert(char *name, union all_addr *addr, unsigned sho
+       if (freed_all)
+ 	{
+ 	  /* For DNSSEC records, uid holds class. */
+-	  free_avail = 1; /* Must be free space now. */
++	  free_avail = new; /* Must be free space now. */
+ 	  
+ 	  /* condition valid when stale-caching */
+ 	  if (difftime(now, new->ttd) < 0)
+ 	    daemon->metrics[METRIC_DNS_CACHE_LIVE_FREED]++;
+ 	  
+-	  cache_scan_free(cache_get_name(new), &new->addr, new->uid, now, new->flags, NULL, NULL);
++	  cache_scan_free(cache_get_name(new), &new->addr, new->uid, now, new->flags, NULL, NULL); 
+ 	}
+       else
+ 	{
+@@ -1080,7 +1082,6 @@ static void add_hosts_entry(struct crec *cache, union all_addr *addr, int addrle
+      the array rhash, hashed on address. Note that rhash and the values
+      in ->next are only valid  whilst reading hosts files: the buckets are
+      then freed, and the ->next pointer used for other things. 
+-
+      Only insert each unique address once into this hashing structure.
+ 
+      This complexity avoids O(n^2) divergent CPU use whilst reading
+@@ -1760,6 +1761,94 @@ static char *sanitise(char *name)
+   return name;
+ }
+ 
++static void dump_cache_entry(struct crec *cache, time_t now)
++{
++  (void)now;
++  static char *buff = NULL;
++  
++  char *p, *t = " ";
++  char *a = daemon->addrbuff, *n = cache_get_name(cache);
++
++  /* String length is limited below */
++  if (!buff && !(buff = whine_malloc(150)))
++    return;
++  
++  p = buff;
++  
++  *a = 0;
++  if (strlen(n) == 0 && !(cache->flags & F_REVERSE))
++    n = "<Root>";
++  p += sprintf(p, "%-30.30s ", sanitise(n));
++  if ((cache->flags & F_CNAME) && !is_outdated_cname_pointer(cache))
++    a = sanitise(cache_get_cname_target(cache));
++  else if ((cache->flags & F_SRV) && !(cache->flags & F_NEG))
++    {
++      int targetlen = cache->addr.srv.targetlen;
++      ssize_t len = sprintf(a, "%u %u %u ", cache->addr.srv.priority,
++			    cache->addr.srv.weight, cache->addr.srv.srvport);
++      
++      if (targetlen > (40 - len))
++	targetlen = 40 - len;
++      blockdata_retrieve(cache->addr.srv.target, targetlen, a + len);
++      a[len + targetlen] = 0;		
++    }
++#ifdef HAVE_DNSSEC
++  else if (cache->flags & F_DS)
++    {
++      if (!(cache->flags & F_NEG))
++	sprintf(a, "%5u %3u %3u", cache->addr.ds.keytag,
++		cache->addr.ds.algo, cache->addr.ds.digest);
++    }
++  else if (cache->flags & F_DNSKEY)
++    sprintf(a, "%5u %3u %3u", cache->addr.key.keytag,
++	    cache->addr.key.algo, cache->addr.key.flags);
++#endif
++  else if (!(cache->flags & F_NEG) || !(cache->flags & F_FORWARD))
++    { 
++      a = daemon->addrbuff;
++      if (cache->flags & F_IPV4)
++	inet_ntop(AF_INET, &cache->addr, a, ADDRSTRLEN);
++      else if (cache->flags & F_IPV6)
++	inet_ntop(AF_INET6, &cache->addr, a, ADDRSTRLEN);
++    }
++  
++  if (cache->flags & F_IPV4)
++    t = "4";
++  else if (cache->flags & F_IPV6)
++    t = "6";
++  else if (cache->flags & F_CNAME)
++    t = "C";
++  else if (cache->flags & F_SRV)
++    t = "V";
++#ifdef HAVE_DNSSEC
++  else if (cache->flags & F_DS)
++    t = "S";
++  else if (cache->flags & F_DNSKEY)
++    t = "K";
++#endif
++  else if (!(cache->flags & F_NXDOMAIN)) /* non-terminal */
++    t = "!";
++  
++  p += sprintf(p, "%-40.40s %s%s%s%s%s%s%s%s%s%s ", a, t,
++	       cache->flags & F_FORWARD ? "F" : " ",
++	       cache->flags & F_REVERSE ? "R" : " ",
++	       cache->flags & F_IMMORTAL ? "I" : " ",
++	       cache->flags & F_DHCP ? "D" : " ",
++	       cache->flags & F_NEG ? "N" : " ",
++	       cache->flags & F_NXDOMAIN ? "X" : " ",
++	       cache->flags & F_HOSTS ? "H" : " ",
++	       cache->flags & F_CONFIG ? "C" : " ",
++	       cache->flags & F_DNSSECOK ? "V" : " ");
++#ifdef HAVE_BROKEN_RTC
++  p += sprintf(p, "%-24lu", cache->flags & F_IMMORTAL ? 0: (unsigned long)(cache->ttd - now));
++#else
++  p += sprintf(p, "%-24.24s", cache->flags & F_IMMORTAL ? "" : ctime(&(cache->ttd)));
++#endif
++  if(cache->flags & (F_HOSTS | F_CONFIG) && cache->uid > 0)
++    p += sprintf(p, " %-40.40s", record_source(cache->uid));
++  
++  my_syslog(LOG_INFO, "%s", buff);
++}
+ 
+ void dump_cache(time_t now)
+ {
+@@ -1807,90 +1896,14 @@ void dump_cache(time_t now)
+ 
+   if (option_bool(OPT_DEBUG) || option_bool(OPT_LOG))
+     {
+-      struct crec *cache ;
++      struct crec *cache;
+       int i;
+       my_syslog(LOG_INFO, "Host                           Address                                  Flags      Expires                  Source");
+       my_syslog(LOG_INFO, "------------------------------ ---------------------------------------- ---------- ------------------------ ------------");
+     
+       for (i=0; i<hash_size; i++)
+ 	for (cache = hash_table[i]; cache; cache = cache->hash_next)
+-	  {
+-	    char *t = " ";
+-	    char *a = daemon->addrbuff, *p = daemon->namebuff, *n = cache_get_name(cache);
+-	    *a = 0;
+-	    if (strlen(n) == 0 && !(cache->flags & F_REVERSE))
+-	      n = "<Root>";
+-	    p += sprintf(p, "%-30.30s ", sanitise(n));
+-	    if ((cache->flags & F_CNAME) && !is_outdated_cname_pointer(cache))
+-	      a = sanitise(cache_get_cname_target(cache));
+-	    else if ((cache->flags & F_SRV) && !(cache->flags & F_NEG))
+-	      {
+-		int targetlen = cache->addr.srv.targetlen;
+-		ssize_t len = sprintf(a, "%u %u %u ", cache->addr.srv.priority,
+-				      cache->addr.srv.weight, cache->addr.srv.srvport);
+-
+-		if (targetlen > (40 - len))
+-		  targetlen = 40 - len;
+-		blockdata_retrieve(cache->addr.srv.target, targetlen, a + len);
+-		a[len + targetlen] = 0;		
+-	      }
+-#ifdef HAVE_DNSSEC
+-	    else if (cache->flags & F_DS)
+-	      {
+-		if (!(cache->flags & F_NEG))
+-		  sprintf(a, "%5u %3u %3u", cache->addr.ds.keytag,
+-			  cache->addr.ds.algo, cache->addr.ds.digest);
+-	      }
+-	    else if (cache->flags & F_DNSKEY)
+-	      sprintf(a, "%5u %3u %3u", cache->addr.key.keytag,
+-		      cache->addr.key.algo, cache->addr.key.flags);
+-#endif
+-	    else if (!(cache->flags & F_NEG) || !(cache->flags & F_FORWARD))
+-	      { 
+-		a = daemon->addrbuff;
+-		if (cache->flags & F_IPV4)
+-		  inet_ntop(AF_INET, &cache->addr, a, ADDRSTRLEN);
+-		else if (cache->flags & F_IPV6)
+-		  inet_ntop(AF_INET6, &cache->addr, a, ADDRSTRLEN);
+-	      }
+-
+-	    if (cache->flags & F_IPV4)
+-	      t = "4";
+-	    else if (cache->flags & F_IPV6)
+-	      t = "6";
+-	    else if (cache->flags & F_CNAME)
+-	      t = "C";
+-	    else if (cache->flags & F_SRV)
+-	      t = "V";
+-#ifdef HAVE_DNSSEC
+-	    else if (cache->flags & F_DS)
+-	      t = "S";
+-	    else if (cache->flags & F_DNSKEY)
+-	      t = "K";
+-#endif
+-	    else /* non-terminal */
+-	      t = "!";
+-
+-	    p += sprintf(p, "%-40.40s %s%s%s%s%s%s%s%s%s%s ", a, t,
+-			 cache->flags & F_FORWARD ? "F" : " ",
+-			 cache->flags & F_REVERSE ? "R" : " ",
+-			 cache->flags & F_IMMORTAL ? "I" : " ",
+-			 cache->flags & F_DHCP ? "D" : " ",
+-			 cache->flags & F_NEG ? "N" : " ",
+-			 cache->flags & F_NXDOMAIN ? "X" : " ",
+-			 cache->flags & F_HOSTS ? "H" : " ",
+-			 cache->flags & F_CONFIG ? "C" : " ",
+-			 cache->flags & F_DNSSECOK ? "V" : " ");
+-#ifdef HAVE_BROKEN_RTC
+-	    p += sprintf(p, "%-24lu", cache->flags & F_IMMORTAL ? 0: (unsigned long)(cache->ttd - now));
+-#else
+-	    p += sprintf(p, "%-24.24s", cache->flags & F_IMMORTAL ? "" : ctime(&(cache->ttd)));
+-#endif
+-	    if(cache->flags & (F_HOSTS | F_CONFIG) && cache->uid > 0)
+-		p += sprintf(p, " %s", record_source(cache->uid));
+-
+-	    my_syslog(LOG_INFO, "%s", daemon->namebuff);
+-	  }
++	  dump_cache_entry(cache, now);
+     }
+ }
+ 
+diff --git a/release/src/router/dnsmasq/src/dnsmasq.h b/release/src/router/dnsmasq/src/dnsmasq.h
+index 7936a51fc5..88e4e560dd 100644
+--- a/release/src/router/dnsmasq/src/dnsmasq.h
++++ b/release/src/router/dnsmasq/src/dnsmasq.h
+@@ -281,7 +281,8 @@ struct event_desc {
+ #define OPT_STRIP_ECS      69
+ #define OPT_STRIP_MAC      70
+ #define OPT_NORR           71
+-#define OPT_LAST           72
++#define OPT_NO_IDENT       72
++#define OPT_LAST           73
+ 
+ #define OPTION_BITS (sizeof(unsigned int)*8)
+ #define OPTION_SIZE ( (OPT_LAST/OPTION_BITS)+((OPT_LAST%OPTION_BITS)!=0) )
+diff --git a/release/src/router/dnsmasq/src/option.c b/release/src/router/dnsmasq/src/option.c
+index affbdbb4f8..fe8799d4ab 100644
+--- a/release/src/router/dnsmasq/src/option.c
++++ b/release/src/router/dnsmasq/src/option.c
+@@ -185,6 +185,7 @@ struct myoption {
+ #define LOPT_FAST_RETRY    376
+ #define LOPT_STALE_CACHE   377
+ #define LOPT_NORR          378
++#define LOPT_NO_IDENT      379
+ 
+ #ifdef HAVE_GETOPT_LONG
+ static const struct option opts[] =  
+@@ -374,6 +375,7 @@ static const struct myoption opts[] =
+     { "port-limit", 1, 0, LOPT_RANDPORT_LIM },
+     { "fast-dns-retry", 2, 0, LOPT_FAST_RETRY },
+     { "use-stale-cache", 2, 0 , LOPT_STALE_CACHE },
++    { "no-ident", 0, 0, LOPT_NO_IDENT },
+     { NULL, 0, 0, 0 }
+   };
+ 
+@@ -570,6 +572,7 @@ static struct {
+   { LOPT_UMBRELLA, ARG_ONE, "[=<optspec>]", gettext_noop("Send Cisco Umbrella identifiers including remote IP."), NULL },
+   { LOPT_QUIET_TFTP, OPT_QUIET_TFTP, NULL, gettext_noop("Do not log routine TFTP."), NULL },
+   { LOPT_NORR, OPT_NORR, NULL, gettext_noop("Suppress round-robin ordering of DNS records."), NULL },
++  { LOPT_NO_IDENT, OPT_NO_IDENT, NULL, gettext_noop("Do not add CHAOS TXT records."), NULL },
+   { 0, 0, NULL, NULL, NULL }
+ }; 
+ 
+@@ -5759,21 +5762,6 @@ void read_opts(int argc, char **argv, char *compile_opts)
+   daemon->randport_limit = 1;
+   daemon->host_index = SRC_AH;
+   
+-#ifndef NO_ID
+-  add_txt("version.bind", "dnsmasq-" VERSION, 0 );
+-  add_txt("authors.bind", "Simon Kelley", 0);
+-  add_txt("copyright.bind", COPYRIGHT, 0);
+-  add_txt("cachesize.bind", NULL, TXT_STAT_CACHESIZE);
+-  add_txt("insertions.bind", NULL, TXT_STAT_INSERTS);
+-  add_txt("evictions.bind", NULL, TXT_STAT_EVICTIONS);
+-  add_txt("misses.bind", NULL, TXT_STAT_MISSES);
+-  add_txt("hits.bind", NULL, TXT_STAT_HITS);
+-#ifdef HAVE_AUTH
+-  add_txt("auth.bind", NULL, TXT_STAT_AUTH);
+-#endif
+-  add_txt("servers.bind", NULL, TXT_STAT_SERVERS);
+-#endif
+-  
+   /* See comment above make_servers(). Optimises server-read code. */
+   mark_servers(0);
+   
+@@ -5871,6 +5859,25 @@ void read_opts(int argc, char **argv, char *compile_opts)
+   else
+     one_file(CONFFILE, LOPT_CONF_OPT);
+ 
++  /* Add TXT records if wanted */
++#ifndef NO_ID
++  if (!option_bool(OPT_NO_IDENT))
++    {
++      add_txt("version.bind", "dnsmasq-" VERSION, 0 );
++      add_txt("authors.bind", "Simon Kelley", 0);
++      add_txt("copyright.bind", COPYRIGHT, 0);
++      add_txt("cachesize.bind", NULL, TXT_STAT_CACHESIZE);
++      add_txt("insertions.bind", NULL, TXT_STAT_INSERTS);
++      add_txt("evictions.bind", NULL, TXT_STAT_EVICTIONS);
++      add_txt("misses.bind", NULL, TXT_STAT_MISSES);
++      add_txt("hits.bind", NULL, TXT_STAT_HITS);
++#ifdef HAVE_AUTH
++      add_txt("auth.bind", NULL, TXT_STAT_AUTH);
++#endif
++      add_txt("servers.bind", NULL, TXT_STAT_SERVERS);
++    }
++#endif
++
+   /* port might not be known when the address is parsed - fill in here */
+   if (daemon->servers)
+     {
+diff --git a/release/src/router/dropbear/sysoptions.h b/release/src/router/dropbear/sysoptions.h
+index 72bca1a324..3e9fc2c03b 100644
+--- a/release/src/router/dropbear/sysoptions.h
++++ b/release/src/router/dropbear/sysoptions.h
+@@ -389,9 +389,11 @@
+ #endif
+ 
+ /* Fuzzing expects all key types to be enabled */
++#if DROPBEAR_FUZZ
+ #if defined(DROPBEAR_DSS)
+ #undef DROPBEAR_DSS
+ #endif
+ #define DROPBEAR_DSS 1
++#endif
+ 
+ /* no include guard for this file */
+diff --git a/release/src/router/dropbear/sysoptions.h.orig b/release/src/router/dropbear/sysoptions.h.orig
+new file mode 100644
+index 0000000000..72bca1a324
+--- /dev/null
++++ b/release/src/router/dropbear/sysoptions.h.orig
+@@ -0,0 +1,397 @@
++/*******************************************************************
++ * You shouldn't edit this file unless you know you need to.
++ * This file is only included from options.h
++ *******************************************************************/
++
++#ifndef DROPBEAR_VERSION
++#define DROPBEAR_VERSION "2022.83"
++#endif
++
++#ifndef LOCAL_IDENT
++#define LOCAL_IDENT "SSH-2.0-dropbear_" DROPBEAR_VERSION
++#endif
++#define PROGNAME "dropbear"
++
++/* Spec recommends after one hour or 1 gigabyte of data. One hour
++ * is a bit too verbose, so we try 8 hours */
++#ifndef KEX_REKEY_TIMEOUT
++#define KEX_REKEY_TIMEOUT (3600 * 8)
++#endif
++#ifndef KEX_REKEY_DATA
++#define KEX_REKEY_DATA (1<<30) /* 2^30 == 1GB, this value must be < INT_MAX */
++#endif
++/* Close connections to clients which haven't authorised after AUTH_TIMEOUT */
++#ifndef AUTH_TIMEOUT
++#define AUTH_TIMEOUT 300 /* we choose 5 minutes */
++#endif
++
++#define DROPBEAR_SVR_PUBKEY_OPTIONS_BUILT ((DROPBEAR_SVR_PUBKEY_AUTH) && (DROPBEAR_SVR_PUBKEY_OPTIONS))
++
++#if !(NON_INETD_MODE || INETD_MODE)
++	#error "NON_INETD_MODE or INETD_MODE (or both) must be enabled."
++#endif
++
++/* Would probably work on freebsd but hasn't been tested */
++#if defined(HAVE_FEXECVE) && DROPBEAR_REEXEC && defined(__linux__)
++#define DROPBEAR_DO_REEXEC 1
++#else
++#define DROPBEAR_DO_REEXEC 0
++#endif
++
++/* A client should try and send an initial key exchange packet guessing
++ * the algorithm that will match - saves a round trip connecting, has little
++ * overhead if the guess was "wrong". */
++#ifndef DROPBEAR_KEX_FIRST_FOLLOWS
++#define DROPBEAR_KEX_FIRST_FOLLOWS 1
++#endif
++/* Use protocol extension to allow "first follows" to succeed more frequently.
++ * This is currently Dropbear-specific but will gracefully fallback when connecting
++ * to other implementations. */
++#ifndef DROPBEAR_KEXGUESS2
++#define DROPBEAR_KEXGUESS2 1
++#endif
++
++/* Minimum key sizes for DSS and RSA */
++#ifndef MIN_DSS_KEYLEN
++#define MIN_DSS_KEYLEN 1024
++#endif
++#ifndef MIN_RSA_KEYLEN
++#define MIN_RSA_KEYLEN 1024
++#endif
++
++#define MAX_BANNER_SIZE 2050 /* this is 25*80 chars, any more is foolish */
++#define MAX_BANNER_LINES 20 /* How many lines the client will display */
++
++/* the number of NAME=VALUE pairs to malloc for environ, if we don't have
++ * the clearenv() function */
++#define ENV_SIZE 100
++
++#define MAX_CMD_LEN 9000 /* max length of a command */
++#define MAX_TERM_LEN 200 /* max length of TERM name */
++
++#define MAX_HOST_LEN 254 /* max hostname len for tcp fwding */
++
++#define DROPBEAR_MAX_PORTS 10 /* max number of ports which can be specified,
++								 ipv4 and ipv6 don't count twice */
++
++/* Each port might have at least a v4 and a v6 address */
++#define MAX_LISTEN_ADDR (DROPBEAR_MAX_PORTS*3)
++
++#define _PATH_TTY "/dev/tty"
++
++#define _PATH_CP "/bin/cp"
++
++/* Default contents of /etc/shells if system getusershell() doesn't exist.
++ * Paths taken from getusershell(3) manpage. These can be customised
++ * on other platforms. One the commandline for CFLAGS it would look like eg
++  -DCOMPAT_USER_SHELLS='"/bin/sh","/apps/bin/sh","/data/bin/zsh"'
++ */
++#ifndef COMPAT_USER_SHELLS
++#define COMPAT_USER_SHELLS "/bin/sh","/bin/csh"
++#endif
++
++#define DROPBEAR_ESCAPE_CHAR '~'
++
++/* success/failure defines */
++#define DROPBEAR_SUCCESS 0
++#define DROPBEAR_FAILURE -1
++
++#define DROPBEAR_PASSWORD_ENV "DROPBEAR_PASSWORD"
++
++#define DROPBEAR_NGROUP_MAX 1024
++
++/* Required for pubkey auth */
++#define DROPBEAR_SIGNKEY_VERIFY ((DROPBEAR_SVR_PUBKEY_AUTH) || (DROPBEAR_CLIENT))
++
++/* crypt(password) must take less time than the auth failure delay
++   (250ms set in svr-auth.c). On Linux the delay depends on
++   password length, 100 characters here was empirically derived.
++
++   If a longer password is allowed Dropbear cannot compensate
++   for the crypt time which will expose which usernames exist */
++#define DROPBEAR_MAX_PASSWORD_LEN 100
++
++#define SHA1_HASH_SIZE 20
++#define SHA256_HASH_SIZE 32
++#define MAX_HASH_SIZE 64 /* sha512 */
++
++#if DROPBEAR_CHACHA20POLY1305
++#define MAX_KEY_LEN 64 /* 2 x 256 bits for chacha20 */
++#else
++#define MAX_KEY_LEN 32 /* 256 bits for aes256 etc */
++#endif
++#define MAX_IV_LEN 20 /* must be same as max blocksize,  */
++
++#if DROPBEAR_SHA2_512_HMAC
++#define MAX_MAC_LEN 64
++#elif DROPBEAR_SHA2_256_HMAC
++#define MAX_MAC_LEN 32
++#else
++#define MAX_MAC_LEN 20
++#endif
++
++/* sha2-512 is not necessary unless unforseen problems arise with sha2-256 */
++#ifndef DROPBEAR_SHA2_512_HMAC
++#define DROPBEAR_SHA2_512_HMAC 0
++#endif
++
++#define DROPBEAR_ECC ((DROPBEAR_ECDH) || (DROPBEAR_ECDSA))
++
++/* Debian doesn't define this in system headers */
++#if !defined(LTM_DESC) && (DROPBEAR_ECC)
++#define LTM_DESC 
++#endif
++
++#define DROPBEAR_ECC_256 (DROPBEAR_ECC)
++#define DROPBEAR_ECC_384 (DROPBEAR_ECC)
++#define DROPBEAR_ECC_521 (DROPBEAR_ECC)
++
++#define DROPBEAR_LTC_PRNG (DROPBEAR_ECC)
++
++/* RSA can be vulnerable to timing attacks which use the time required for
++ * signing to guess the private key. Blinding avoids this attack, though makes
++ * signing operations slightly slower. */
++#define DROPBEAR_RSA_BLINDING 1
++
++#ifndef DROPBEAR_RSA_SHA1
++#define DROPBEAR_RSA_SHA1 DROPBEAR_RSA
++#endif
++#ifndef DROPBEAR_RSA_SHA256
++#define DROPBEAR_RSA_SHA256 DROPBEAR_RSA
++#endif
++
++/* Miller-Rabin primality testing is sufficient for RSA but not DSS.
++ * It's a compile-time setting for libtommath, we can get a speedup
++ * for key generation if DSS is disabled.
++ * https://github.com/mkj/dropbear/issues/174#issuecomment-1267374858
++ */
++#if !DROPBEAR_DSS
++#define LTM_USE_ONLY_MR 1
++#endif
++
++/* hashes which will be linked and registered */
++#define DROPBEAR_SHA1 (DROPBEAR_RSA_SHA1 || DROPBEAR_DSS \
++				|| DROPBEAR_SHA1_HMAC || DROPBEAR_SHA1_96_HMAC \
++				|| DROPBEAR_DH_GROUP1 || DROPBEAR_DH_GROUP14_SHA1 )
++/* sha256 is always used for fingerprints and dbrandom */
++#define DROPBEAR_SHA256 1
++#define DROPBEAR_SHA384 (DROPBEAR_ECC_384)
++/* LTC SHA384 depends on SHA512 */
++#define DROPBEAR_SHA512 ((DROPBEAR_SHA2_512_HMAC) || (DROPBEAR_ECC_521) \
++			|| (DROPBEAR_SHA384) || (DROPBEAR_DH_GROUP16) \
++			|| (DROPBEAR_ED25519))
++
++#define DROPBEAR_DH_GROUP14 ((DROPBEAR_DH_GROUP14_SHA256) || (DROPBEAR_DH_GROUP14_SHA1))
++
++#define DROPBEAR_NORMAL_DH ((DROPBEAR_DH_GROUP1) || (DROPBEAR_DH_GROUP14) || (DROPBEAR_DH_GROUP16))
++
++#ifndef DROPBEAR_SK_ECDSA
++#define DROPBEAR_SK_ECDSA DROPBEAR_SK_KEYS
++#endif
++#ifndef DROPBEAR_SK_ED25519
++#define DROPBEAR_SK_ED25519 DROPBEAR_SK_KEYS
++#endif
++
++/* Dropbear only uses server-sig-algs, only needed if we have rsa-sha256 pubkey auth */
++#define DROPBEAR_EXT_INFO ((DROPBEAR_RSA_SHA256) \
++		&& ((DROPBEAR_CLI_PUBKEY_AUTH) || (DROPBEAR_SVR_PUBKEY_AUTH)))
++
++/* roughly 2x 521 bits */
++#define MAX_ECC_SIZE 140
++
++#define MAX_NAME_LEN 64 /* maximum length of a protocol name, isn't
++						   explicitly specified for all protocols (just
++						   for algos) but seems valid */
++
++#define MAX_PROPOSED_ALGO 50
++
++/* size/count limits */
++/* From transport rfc */
++#define MIN_PACKET_LEN 16
++
++#define RECV_MAX_PACKET_LEN (MAX(35000, ((RECV_MAX_PAYLOAD_LEN)+100)))
++
++/* for channel code */
++#define TRANS_MAX_WINDOW 500000000 /* 500MB is sufficient, stopping overflow */
++#define TRANS_MAX_WIN_INCR 500000000 /* overflow prevention */
++
++#define RECV_WINDOWEXTEND (opts.recv_window / 3) /* We send a "window extend" every
++								RECV_WINDOWEXTEND bytes */
++#define MAX_RECV_WINDOW (10*1024*1024) /* 10 MB should be enough */
++
++#define MAX_CHANNELS 1000 /* simple mem restriction, includes each tcp/x11
++							connection, so can't be _too_ small */
++
++#define MAX_STRING_LEN (MAX(MAX_CMD_LEN, 2400)) /* Sun SSH needs 2400 for algos,
++                                                   MAX_CMD_LEN is usually longer */
++
++/* For a 4096 bit DSS key, empirically determined */
++#define MAX_PUBKEY_SIZE 1700
++/* For a 4096 bit DSS key, empirically determined */
++#define MAX_PRIVKEY_SIZE 1700
++
++#define MAX_HOSTKEYS 4
++
++/* The maximum size of the bignum portion of the kexhash buffer */
++/* Sect. 8 of the transport rfc 4253, K_S + e + f + K */
++#define KEXHASHBUF_MAX_INTS (1700 + 130 + 130 + 130)
++
++#define DROPBEAR_MAX_SOCKS 2 /* IPv4, IPv6 are all we'll get for now. Revisit
++								in a few years time.... */
++
++#define DROPBEAR_MAX_CLI_PASS 1024
++
++#define DROPBEAR_MAX_CLI_INTERACT_PROMPTS 80 /* The number of prompts we'll 
++												accept for keyb-interactive
++												auth */
++
++
++#define DROPBEAR_AES ((DROPBEAR_AES256) || (DROPBEAR_AES128))
++
++#define DROPBEAR_AEAD_MODE ((DROPBEAR_CHACHA20POLY1305) || (DROPBEAR_ENABLE_GCM_MODE))
++
++#define DROPBEAR_CLI_ANYTCPFWD ((DROPBEAR_CLI_REMOTETCPFWD) || (DROPBEAR_CLI_LOCALTCPFWD))
++
++#define DROPBEAR_TCP_ACCEPT ((DROPBEAR_CLI_LOCALTCPFWD) || (DROPBEAR_SVR_REMOTETCPFWD))
++
++#define DROPBEAR_LISTENERS \
++   ((DROPBEAR_CLI_REMOTETCPFWD) || (DROPBEAR_CLI_LOCALTCPFWD) || \
++	(DROPBEAR_SVR_REMOTETCPFWD) || (DROPBEAR_SVR_LOCALTCPFWD) || \
++	(DROPBEAR_SVR_AGENTFWD) || (DROPBEAR_X11FWD))
++
++#define DROPBEAR_CLI_MULTIHOP ((DROPBEAR_CLI_NETCAT) && (DROPBEAR_CLI_PROXYCMD))
++
++#define ENABLE_CONNECT_UNIX ((DROPBEAR_CLI_AGENTFWD) || (DROPBEAR_USE_PRNGD))
++
++/* if we're using authorized_keys or known_hosts */ 
++#define DROPBEAR_KEY_LINES ((DROPBEAR_CLIENT) || (DROPBEAR_SVR_PUBKEY_AUTH))
++
++/* Changing this is inadvisable, it appears to have problems
++ * with flushing compressed data */
++#define DROPBEAR_ZLIB_MEM_LEVEL 8
++
++#if (DROPBEAR_SVR_PASSWORD_AUTH) && (DROPBEAR_SVR_PAM_AUTH)
++#error "You can't turn on PASSWORD and PAM auth both at once. Fix it in localoptions.h"
++#endif
++
++/* PAM requires ./configure --enable-pam */
++#if !defined(HAVE_LIBPAM) && DROPBEAR_SVR_PAM_AUTH
++#error "DROPBEAR_SVR_PATM_AUTH requires PAM headers. Perhaps ./configure --enable-pam ?"
++#endif
++
++#if DROPBEAR_SVR_PASSWORD_AUTH && !HAVE_CRYPT
++	#error "DROPBEAR_SVR_PASSWORD_AUTH requires `crypt()'."
++#endif
++
++#if !(DROPBEAR_SVR_PASSWORD_AUTH || DROPBEAR_SVR_PAM_AUTH || DROPBEAR_SVR_PUBKEY_AUTH)
++	#error "At least one server authentication type must be enabled. DROPBEAR_SVR_PUBKEY_AUTH and DROPBEAR_SVR_PASSWORD_AUTH are recommended."
++#endif
++
++#if (DROPBEAR_PLUGIN && !DROPBEAR_SVR_PUBKEY_AUTH)
++	#error "You must define DROPBEAR_SVR_PUBKEY_AUTH in order to use plugins"
++#endif
++
++#if !(DROPBEAR_AES128 || DROPBEAR_3DES || DROPBEAR_AES256 || DROPBEAR_CHACHA20POLY1305)
++	#error "At least one encryption algorithm must be enabled. AES128 is recommended."
++#endif
++
++#if !(DROPBEAR_RSA || DROPBEAR_DSS || DROPBEAR_ECDSA || DROPBEAR_ED25519)
++	#error "At least one hostkey or public-key algorithm must be enabled; RSA is recommended."
++#endif
++
++/* Source for randomness. This must be able to provide hundreds of bytes per SSH
++ * connection without blocking. */
++#ifndef DROPBEAR_URANDOM_DEV
++#define DROPBEAR_URANDOM_DEV "/dev/urandom"
++#endif
++
++/* client keyboard interactive authentication is often used for password auth.
++ rfc4256 */
++#define DROPBEAR_CLI_INTERACT_AUTH (DROPBEAR_CLI_PASSWORD_AUTH)
++
++/* We use dropbear_client and dropbear_server as shortcuts to avoid redundant
++ * code, if we're just compiling as client or server */
++#if (DROPBEAR_SERVER) && (DROPBEAR_CLIENT)
++
++#define IS_DROPBEAR_SERVER (ses.isserver == 1)
++#define IS_DROPBEAR_CLIENT (ses.isserver == 0)
++
++#elif DROPBEAR_SERVER
++
++#define IS_DROPBEAR_SERVER 1
++#define IS_DROPBEAR_CLIENT 0
++
++#elif DROPBEAR_CLIENT
++
++#define IS_DROPBEAR_SERVER 0
++#define IS_DROPBEAR_CLIENT 1
++
++#else
++/* Just building key utils? */
++#define IS_DROPBEAR_SERVER 0
++#define IS_DROPBEAR_CLIENT 0
++
++#endif /* neither DROPBEAR_SERVER nor DROPBEAR_CLIENT */
++
++#ifdef HAVE_FORK
++#define DROPBEAR_VFORK 0
++#else
++#define DROPBEAR_VFORK 1
++#endif
++
++#ifndef DROPBEAR_LISTEN_BACKLOG
++#if MAX_UNAUTH_CLIENTS > MAX_CHANNELS
++#define DROPBEAR_LISTEN_BACKLOG MAX_UNAUTH_CLIENTS
++#else
++#define DROPBEAR_LISTEN_BACKLOG MAX_CHANNELS
++#endif
++#endif
++
++/* free memory before exiting */
++#define DROPBEAR_CLEANUP 1
++
++/* Use this string since some implementations might special-case it */
++#define DROPBEAR_KEEPALIVE_STRING "keepalive@openssh.com"
++
++/* Linux will attempt TCP fast open, falling back if not supported by the kernel.
++ * Currently server is enabled but client is disabled by default until there
++ * is further compatibility testing */
++#ifdef __linux__
++#ifndef DROPBEAR_SERVER_TCP_FAST_OPEN
++#define DROPBEAR_SERVER_TCP_FAST_OPEN 1
++#endif
++#ifndef DROPBEAR_CLIENT_TCP_FAST_OPEN
++#define DROPBEAR_CLIENT_TCP_FAST_OPEN 0
++#endif
++#else
++#define DROPBEAR_SERVER_TCP_FAST_OPEN 0
++#define DROPBEAR_CLIENT_TCP_FAST_OPEN 0
++#endif
++
++#define DROPBEAR_TRACKING_MALLOC (DROPBEAR_FUZZ)
++
++/* Used to work around Memory Sanitizer false positives */
++#if defined(__has_feature)
++#  if __has_feature(memory_sanitizer)
++#    define DROPBEAR_MSAN 1
++#  endif
++#endif
++#ifndef DROPBEAR_MSAN 
++#define DROPBEAR_MSAN 0
++#endif
++
++#ifndef DEBUG_DSS_VERIFY
++#define DEBUG_DSS_VERIFY 0
++#endif
++
++#ifndef DROPBEAR_MULTI
++#define DROPBEAR_MULTI 0
++#endif
++
++/* Fuzzing expects all key types to be enabled */
++#if defined(DROPBEAR_DSS)
++#undef DROPBEAR_DSS
++#endif
++#define DROPBEAR_DSS 1
++
++/* no include guard for this file */
 diff --git a/release/src/router/openssl-1.1/CHANGES b/release/src/router/openssl-1.1/CHANGES
-index 979170072d1..1e2d651b751 100644
+index 979170072d..1e2d651b75 100644
 --- a/release/src/router/openssl-1.1/CHANGES
 +++ b/release/src/router/openssl-1.1/CHANGES
 @@ -7,11 +7,85 @@
@@ -147,7 +1067,7 @@ index 979170072d1..1e2d651b751 100644
  
   Changes between 1.1.1q and 1.1.1r [11 Oct 2022]
 diff --git a/release/src/router/openssl-1.1/Configure b/release/src/router/openssl-1.1/Configure
-index 4bea49d7da7..6cb1a84f4b7 100755
+index 4bea49d7da..6cb1a84f4b 100755
 --- a/release/src/router/openssl-1.1/Configure
 +++ b/release/src/router/openssl-1.1/Configure
 @@ -1,6 +1,6 @@
@@ -210,7 +1130,7 @@ index 4bea49d7da7..6cb1a84f4b7 100755
  
  Failure!  $build_file wasn't produced.
 diff --git a/release/src/router/openssl-1.1/NEWS b/release/src/router/openssl-1.1/NEWS
-index c9e63eea63a..2724fc4d85b 100644
+index c9e63eea63..2724fc4d85 100644
 --- a/release/src/router/openssl-1.1/NEWS
 +++ b/release/src/router/openssl-1.1/NEWS
 @@ -5,6 +5,13 @@
@@ -228,7 +1148,7 @@ index c9e63eea63a..2724fc4d85b 100644
  
        o Fixed a regression introduced in OpenSSL 1.1.1r not refreshing the
 diff --git a/release/src/router/openssl-1.1/README b/release/src/router/openssl-1.1/README
-index 2f6d91c6337..b2f806be3a4 100644
+index 2f6d91c633..b2f806be3a 100644
 --- a/release/src/router/openssl-1.1/README
 +++ b/release/src/router/openssl-1.1/README
 @@ -1,5 +1,5 @@
@@ -239,7 +1159,7 @@ index 2f6d91c6337..b2f806be3a4 100644
   Copyright (c) 1998-2022 The OpenSSL Project
   Copyright (c) 1995-1998 Eric A. Young, Tim J. Hudson
 diff --git a/release/src/router/openssl-1.1/crypto/asn1/asn_mime.c b/release/src/router/openssl-1.1/crypto/asn1/asn_mime.c
-index 38735cd86f3..36853612b69 100644
+index 38735cd86f..36853612b6 100644
 --- a/release/src/router/openssl-1.1/crypto/asn1/asn_mime.c
 +++ b/release/src/router/openssl-1.1/crypto/asn1/asn_mime.c
 @@ -489,6 +489,7 @@ int SMIME_crlf_copy(BIO *in, BIO *out, int flags)
@@ -265,7 +1185,7 @@ index 38735cd86f3..36853612b69 100644
  }
  
 diff --git a/release/src/router/openssl-1.1/crypto/asn1/bio_asn1.c b/release/src/router/openssl-1.1/crypto/asn1/bio_asn1.c
-index 914d77c866c..17b0d1aa6ca 100644
+index 914d77c866..17b0d1aa6c 100644
 --- a/release/src/router/openssl-1.1/crypto/asn1/bio_asn1.c
 +++ b/release/src/router/openssl-1.1/crypto/asn1/bio_asn1.c
 @@ -172,7 +172,7 @@ static int asn1_bio_write(BIO *b, const char *in, int inl)
@@ -287,7 +1207,7 @@ index 914d77c866c..17b0d1aa6ca 100644
              ASN1_put_object(&p, 0, inl, ctx->asn1_tag, ctx->asn1_class);
              ctx->copylen = inl;
 diff --git a/release/src/router/openssl-1.1/crypto/asn1/bio_ndef.c b/release/src/router/openssl-1.1/crypto/asn1/bio_ndef.c
-index 760e4846a47..c8a776b482d 100644
+index 760e4846a4..c8a776b482 100644
 --- a/release/src/router/openssl-1.1/crypto/asn1/bio_ndef.c
 +++ b/release/src/router/openssl-1.1/crypto/asn1/bio_ndef.c
 @@ -1,5 +1,5 @@
@@ -377,7 +1297,7 @@ index 760e4846a47..c8a776b482d 100644
      OPENSSL_free(ndef_aux);
      return NULL;
 diff --git a/release/src/router/openssl-1.1/crypto/bio/b_print.c b/release/src/router/openssl-1.1/crypto/bio/b_print.c
-index 41b7f5e2f61..45d4e9f004b 100644
+index 41b7f5e2f6..45d4e9f004 100644
 --- a/release/src/router/openssl-1.1/crypto/bio/b_print.c
 +++ b/release/src/router/openssl-1.1/crypto/bio/b_print.c
 @@ -1,5 +1,5 @@
@@ -460,7 +1380,7 @@ index 41b7f5e2f61..45d4e9f004b 100644
  
  static int
 diff --git a/release/src/router/openssl-1.1/crypto/bn/bn_blind.c b/release/src/router/openssl-1.1/crypto/bn/bn_blind.c
-index 76fc7ebcffc..dd5beea7c93 100644
+index 76fc7ebcff..dd5beea7c9 100644
 --- a/release/src/router/openssl-1.1/crypto/bn/bn_blind.c
 +++ b/release/src/router/openssl-1.1/crypto/bn/bn_blind.c
 @@ -1,5 +1,5 @@
@@ -492,7 +1412,7 @@ index 76fc7ebcffc..dd5beea7c93 100644
  {
      BN_BLINDING *ret = NULL;
 diff --git a/release/src/router/openssl-1.1/crypto/bn/bn_err.c b/release/src/router/openssl-1.1/crypto/bn/bn_err.c
-index dd87c152cf3..6f5464b5405 100644
+index dd87c152cf..6f5464b540 100644
 --- a/release/src/router/openssl-1.1/crypto/bn/bn_err.c
 +++ b/release/src/router/openssl-1.1/crypto/bn/bn_err.c
 @@ -1,6 +1,6 @@
@@ -513,7 +1433,7 @@ index dd87c152cf3..6f5464b5405 100644
  };
  
 diff --git a/release/src/router/openssl-1.1/crypto/bn/bn_exp.c b/release/src/router/openssl-1.1/crypto/bn/bn_exp.c
-index e21dcff027c..517e3c29fc7 100644
+index e21dcff027..517e3c29fc 100644
 --- a/release/src/router/openssl-1.1/crypto/bn/bn_exp.c
 +++ b/release/src/router/openssl-1.1/crypto/bn/bn_exp.c
 @@ -1,5 +1,5 @@
@@ -607,7 +1527,7 @@ index e21dcff027c..517e3c29fc7 100644
              goto err;
          if (!MOD_EXP_CTIME_COPY_TO_PREBUF(&am, top, powerbuf, 1, window))
 diff --git a/release/src/router/openssl-1.1/crypto/bn/bn_local.h b/release/src/router/openssl-1.1/crypto/bn/bn_local.h
-index 8ad69ccd363..30b7614fdbb 100644
+index 8ad69ccd36..30b7614fdb 100644
 --- a/release/src/router/openssl-1.1/crypto/bn/bn_local.h
 +++ b/release/src/router/openssl-1.1/crypto/bn/bn_local.h
 @@ -1,5 +1,5 @@
@@ -666,7 +1586,7 @@ index 8ad69ccd363..30b7614fdbb 100644
   * BN_window_bits_for_exponent_size -- macro for sliding window mod_exp functions
   *
 diff --git a/release/src/router/openssl-1.1/crypto/bn/bn_mont.c b/release/src/router/openssl-1.1/crypto/bn/bn_mont.c
-index 1e5045a010b..7617b0df5e7 100644
+index 1e5045a010..7617b0df5e 100644
 --- a/release/src/router/openssl-1.1/crypto/bn/bn_mont.c
 +++ b/release/src/router/openssl-1.1/crypto/bn/bn_mont.c
 @@ -1,5 +1,5 @@
@@ -686,7 +1606,7 @@ index 1e5045a010b..7617b0df5e7 100644
              return 0;
          if (bn_mul_mont(r->d, a->d, b->d, mont->N.d, mont->n0, num)) {
 diff --git a/release/src/router/openssl-1.1/crypto/bn/build.info b/release/src/router/openssl-1.1/crypto/bn/build.info
-index b9ed5322fa6..c9fe2fdada6 100644
+index b9ed5322fa..c9fe2fdada 100644
 --- a/release/src/router/openssl-1.1/crypto/bn/build.info
 +++ b/release/src/router/openssl-1.1/crypto/bn/build.info
 @@ -5,7 +5,8 @@ SOURCE[../../libcrypto]=\
@@ -701,7 +1621,7 @@ index b9ed5322fa6..c9fe2fdada6 100644
  
 diff --git a/release/src/router/openssl-1.1/crypto/bn/rsa_sup_mul.c b/release/src/router/openssl-1.1/crypto/bn/rsa_sup_mul.c
 new file mode 100644
-index 00000000000..acafefd5feb
+index 0000000000..acafefd5fe
 --- /dev/null
 +++ b/release/src/router/openssl-1.1/crypto/bn/rsa_sup_mul.c
 @@ -0,0 +1,614 @@
@@ -1320,7 +2240,7 @@ index 00000000000..acafefd5feb
 +    return ret;
 +}
 diff --git a/release/src/router/openssl-1.1/crypto/cms/cms_enc.c b/release/src/router/openssl-1.1/crypto/cms/cms_enc.c
-index fc490303d4c..6f077b339a8 100644
+index fc490303d4..6f077b339a 100644
 --- a/release/src/router/openssl-1.1/crypto/cms/cms_enc.c
 +++ b/release/src/router/openssl-1.1/crypto/cms/cms_enc.c
 @@ -68,7 +68,12 @@ BIO *cms_EncryptedContent_init_bio(CMS_EncryptedContentInfo *ec)
@@ -1337,7 +2257,7 @@ index fc490303d4c..6f077b339a8 100644
          ivlen = EVP_CIPHER_CTX_iv_length(ctx);
          if (ivlen > 0) {
 diff --git a/release/src/router/openssl-1.1/crypto/cms/cms_err.c b/release/src/router/openssl-1.1/crypto/cms/cms_err.c
-index a211f4954ce..408fe13b87d 100644
+index a211f4954c..408fe13b87 100644
 --- a/release/src/router/openssl-1.1/crypto/cms/cms_err.c
 +++ b/release/src/router/openssl-1.1/crypto/cms/cms_err.c
 @@ -264,6 +264,8 @@ static const ERR_STRING_DATA CMS_str_reasons[] = {
@@ -1350,7 +2270,7 @@ index a211f4954ce..408fe13b87d 100644
      "unsupported content type"},
      {ERR_PACK(ERR_LIB_CMS, 0, CMS_R_UNSUPPORTED_KEK_ALGORITHM),
 diff --git a/release/src/router/openssl-1.1/crypto/err/openssl.txt b/release/src/router/openssl-1.1/crypto/err/openssl.txt
-index 902e97b8435..ba3a46d5b98 100644
+index 902e97b843..ba3a46d5b9 100644
 --- a/release/src/router/openssl-1.1/crypto/err/openssl.txt
 +++ b/release/src/router/openssl-1.1/crypto/err/openssl.txt
 @@ -1,4 +1,4 @@
@@ -1377,7 +2297,7 @@ index 902e97b8435..ba3a46d5b98 100644
  CMS_R_UNSUPPORTED_KEK_ALGORITHM:153:unsupported kek algorithm
  CMS_R_UNSUPPORTED_KEY_ENCRYPTION_ALGORITHM:179:\
 diff --git a/release/src/router/openssl-1.1/crypto/evp/bio_enc.c b/release/src/router/openssl-1.1/crypto/evp/bio_enc.c
-index 6639061eae9..9afce7c0840 100644
+index 6639061eae..9afce7c084 100644
 --- a/release/src/router/openssl-1.1/crypto/evp/bio_enc.c
 +++ b/release/src/router/openssl-1.1/crypto/evp/bio_enc.c
 @@ -299,6 +299,7 @@ static long enc_ctrl(BIO *b, int cmd, long num, void *ptr)
@@ -1405,7 +2325,7 @@ index 6639061eae9..9afce7c0840 100644
          }
  
 diff --git a/release/src/router/openssl-1.1/crypto/pem/pem_lib.c b/release/src/router/openssl-1.1/crypto/pem/pem_lib.c
-index aae42d98d29..14f9ca4aa4d 100644
+index aae42d98d2..14f9ca4aa4 100644
 --- a/release/src/router/openssl-1.1/crypto/pem/pem_lib.c
 +++ b/release/src/router/openssl-1.1/crypto/pem/pem_lib.c
 @@ -1,5 +1,5 @@
@@ -1444,7 +2364,7 @@ index aae42d98d29..14f9ca4aa4d 100644
      }
      BIO_read(headerB, *header, headerlen);
 diff --git a/release/src/router/openssl-1.1/crypto/rsa/rsa_ameth.c b/release/src/router/openssl-1.1/crypto/rsa/rsa_ameth.c
-index fb045544a83..2c9c46ea53c 100644
+index fb045544a8..2c9c46ea53 100644
 --- a/release/src/router/openssl-1.1/crypto/rsa/rsa_ameth.c
 +++ b/release/src/router/openssl-1.1/crypto/rsa/rsa_ameth.c
 @@ -172,6 +172,7 @@ static int rsa_priv_encode(PKCS8_PRIV_KEY_INFO *p8, const EVP_PKEY *pkey)
@@ -1456,7 +2376,7 @@ index fb045544a83..2c9c46ea53c 100644
      }
  
 diff --git a/release/src/router/openssl-1.1/crypto/rsa/rsa_ossl.c b/release/src/router/openssl-1.1/crypto/rsa/rsa_ossl.c
-index b52a66f6a62..2e3ee4ab33d 100644
+index b52a66f6a6..2e3ee4ab33 100644
 --- a/release/src/router/openssl-1.1/crypto/rsa/rsa_ossl.c
 +++ b/release/src/router/openssl-1.1/crypto/rsa/rsa_ossl.c
 @@ -1,5 +1,5 @@
@@ -1492,7 +2412,7 @@ index b52a66f6a62..2e3ee4ab33d 100644
      switch (padding) {
      case RSA_PKCS1_PADDING:
 diff --git a/release/src/router/openssl-1.1/crypto/txt_db/txt_db.c b/release/src/router/openssl-1.1/crypto/txt_db/txt_db.c
-index c4e1782514d..cbb81905ac8 100644
+index c4e1782514..cbb81905ac 100644
 --- a/release/src/router/openssl-1.1/crypto/txt_db/txt_db.c
 +++ b/release/src/router/openssl-1.1/crypto/txt_db/txt_db.c
 @@ -1,5 +1,5 @@
@@ -1519,7 +2439,7 @@ index c4e1782514d..cbb81905ac8 100644
              break;
          if ((offset == 0) && (buf->data[0] == '#'))
 diff --git a/release/src/router/openssl-1.1/crypto/x509/by_dir.c b/release/src/router/openssl-1.1/crypto/x509/by_dir.c
-index 238c2519a6e..46a861e90de 100644
+index 238c2519a6..46a861e90d 100644
 --- a/release/src/router/openssl-1.1/crypto/x509/by_dir.c
 +++ b/release/src/router/openssl-1.1/crypto/x509/by_dir.c
 @@ -1,5 +1,5 @@
@@ -1560,7 +2480,7 @@ index 238c2519a6e..46a861e90de 100644
                  hent->suffix = k;
              }
 diff --git a/release/src/router/openssl-1.1/crypto/x509/x_name.c b/release/src/router/openssl-1.1/crypto/x509/x_name.c
-index 59ac6895bc2..dc4a494fb54 100644
+index 59ac6895bc..dc4a494fb5 100644
 --- a/release/src/router/openssl-1.1/crypto/x509/x_name.c
 +++ b/release/src/router/openssl-1.1/crypto/x509/x_name.c
 @@ -1,5 +1,5 @@
@@ -1595,7 +2515,7 @@ index 59ac6895bc2..dc4a494fb54 100644
  
      OPENSSL_free(b);
 diff --git a/release/src/router/openssl-1.1/crypto/x509v3/v3_genn.c b/release/src/router/openssl-1.1/crypto/x509v3/v3_genn.c
-index 87a5eff47cd..fd307c43cf2 100644
+index 87a5eff47c..fd307c43cf 100644
 --- a/release/src/router/openssl-1.1/crypto/x509v3/v3_genn.c
 +++ b/release/src/router/openssl-1.1/crypto/x509v3/v3_genn.c
 @@ -1,5 +1,5 @@
@@ -1615,7 +2535,7 @@ index 87a5eff47cd..fd307c43cf2 100644
  
      case GEN_EDIPARTY:
 diff --git a/release/src/router/openssl-1.1/engines/asm/e_padlock-x86.pl b/release/src/router/openssl-1.1/engines/asm/e_padlock-x86.pl
-index 5b097ce3ef9..7d5c92d98ce 100644
+index 5b097ce3ef..7d5c92d98c 100644
 --- a/release/src/router/openssl-1.1/engines/asm/e_padlock-x86.pl
 +++ b/release/src/router/openssl-1.1/engines/asm/e_padlock-x86.pl
 @@ -1,5 +1,5 @@
@@ -1625,7 +2545,7 @@ index 5b097ce3ef9..7d5c92d98ce 100644
  #
  # Licensed under the OpenSSL license (the "License").  You may not use
  # this file except in compliance with the License.  You can obtain a copy
-@@ -116,6 +116,8 @@
+@@ -116,6 +116,8 @@ $chunk="ebx";
  &function_begin_B("padlock_key_bswap");
  	&mov	("edx",&wparam(0));
  	&mov	("ecx",&DWP(240,"edx"));
@@ -1635,7 +2555,7 @@ index 5b097ce3ef9..7d5c92d98ce 100644
  	&mov	("eax",&DWP(0,"edx"));
  	&bswap	("eax");
 diff --git a/release/src/router/openssl-1.1/engines/asm/e_padlock-x86_64.pl b/release/src/router/openssl-1.1/engines/asm/e_padlock-x86_64.pl
-index 09b0aaa48df..f60bec1e7d5 100644
+index 09b0aaa48d..f60bec1e7d 100644
 --- a/release/src/router/openssl-1.1/engines/asm/e_padlock-x86_64.pl
 +++ b/release/src/router/openssl-1.1/engines/asm/e_padlock-x86_64.pl
 @@ -1,5 +1,5 @@
@@ -1645,7 +2565,7 @@ index 09b0aaa48df..f60bec1e7d5 100644
  #
  # Licensed under the OpenSSL license (the "License").  You may not use
  # this file except in compliance with the License.  You can obtain a copy
-@@ -92,6 +92,8 @@
+@@ -92,6 +92,8 @@ padlock_capability:
  .align	16
  padlock_key_bswap:
  	mov	240($arg1),%edx
@@ -1655,7 +2575,7 @@ index 09b0aaa48df..f60bec1e7d5 100644
  	mov	($arg1),%eax
  	bswap	%eax
 diff --git a/release/src/router/openssl-1.1/include/crypto/bn.h b/release/src/router/openssl-1.1/include/crypto/bn.h
-index 60afda1dade..9f866ed71ab 100644
+index 60afda1dad..9f866ed71a 100644
 --- a/release/src/router/openssl-1.1/include/crypto/bn.h
 +++ b/release/src/router/openssl-1.1/include/crypto/bn.h
 @@ -1,5 +1,5 @@
@@ -1677,7 +2597,7 @@ index 60afda1dade..9f866ed71ab 100644
  
  #endif
 diff --git a/release/src/router/openssl-1.1/include/openssl/bnerr.h b/release/src/router/openssl-1.1/include/openssl/bnerr.h
-index 9f3c7cfaab6..5c83777f9f0 100644
+index 9f3c7cfaab..5c83777f9f 100644
 --- a/release/src/router/openssl-1.1/include/openssl/bnerr.h
 +++ b/release/src/router/openssl-1.1/include/openssl/bnerr.h
 @@ -1,6 +1,6 @@
@@ -1697,7 +2617,7 @@ index 9f3c7cfaab6..5c83777f9f0 100644
  /*
   * BN reason codes.
 diff --git a/release/src/router/openssl-1.1/include/openssl/cmserr.h b/release/src/router/openssl-1.1/include/openssl/cmserr.h
-index 7dbc13dc939..d589f592c80 100644
+index 7dbc13dc93..d589f592c8 100644
 --- a/release/src/router/openssl-1.1/include/openssl/cmserr.h
 +++ b/release/src/router/openssl-1.1/include/openssl/cmserr.h
 @@ -187,6 +187,7 @@ int ERR_load_CMS_strings(void);
@@ -1709,7 +2629,7 @@ index 7dbc13dc939..d589f592c80 100644
  #  define CMS_R_UNSUPPORTED_KEK_ALGORITHM                  153
  #  define CMS_R_UNSUPPORTED_KEY_ENCRYPTION_ALGORITHM       179
 diff --git a/release/src/router/openssl-1.1/include/openssl/opensslv.h b/release/src/router/openssl-1.1/include/openssl/opensslv.h
-index fd9400a4360..7b6c212fa09 100644
+index fd9400a436..7b6c212fa0 100644
 --- a/release/src/router/openssl-1.1/include/openssl/opensslv.h
 +++ b/release/src/router/openssl-1.1/include/openssl/opensslv.h
 @@ -39,8 +39,8 @@ extern "C" {
@@ -1724,7 +2644,7 @@ index fd9400a4360..7b6c212fa09 100644
  /*-
   * The macros below are to be used for shared library (.so, .dll, ...)
 diff --git a/release/src/router/openssl-1.1/include/openssl/x509v3.h b/release/src/router/openssl-1.1/include/openssl/x509v3.h
-index 90fa3592ce5..3a4f04c183e 100644
+index 90fa3592ce..3a4f04c183 100644
 --- a/release/src/router/openssl-1.1/include/openssl/x509v3.h
 +++ b/release/src/router/openssl-1.1/include/openssl/x509v3.h
 @@ -1,5 +1,5 @@
@@ -1744,7 +2664,7 @@ index 90fa3592ce5..3a4f04c183e 100644
          EDIPARTYNAME *ediPartyName;
          ASN1_IA5STRING *uniformResourceIdentifier;
 diff --git a/release/src/router/openssl-1.1/ssl/record/rec_layer_s3.c b/release/src/router/openssl-1.1/ssl/record/rec_layer_s3.c
-index fe4abd67230..1db1712a098 100644
+index fe4abd6723..1db1712a09 100644
 --- a/release/src/router/openssl-1.1/ssl/record/rec_layer_s3.c
 +++ b/release/src/router/openssl-1.1/ssl/record/rec_layer_s3.c
 @@ -16,6 +16,7 @@
@@ -1786,7 +2706,7 @@ index fe4abd67230..1db1712a098 100644
                  || origlen > thiswr->length
                  || (thiswr->length > origlen
 diff --git a/release/src/router/openssl-1.1/ssl/record/ssl3_buffer.c b/release/src/router/openssl-1.1/ssl/record/ssl3_buffer.c
-index b9ba25e0c3f..fa597c27467 100644
+index b9ba25e0c3..fa597c2746 100644
 --- a/release/src/router/openssl-1.1/ssl/record/ssl3_buffer.c
 +++ b/release/src/router/openssl-1.1/ssl/record/ssl3_buffer.c
 @@ -1,5 +1,5 @@
@@ -1815,7 +2735,7 @@ index b9ba25e0c3f..fa597c27467 100644
              len += headerlen + align + SSL3_RT_SEND_MAX_ENCRYPTED_OVERHEAD;
      }
 diff --git a/release/src/router/openssl-1.1/test/certs/ee-ed25519.pem b/release/src/router/openssl-1.1/test/certs/ee-ed25519.pem
-index 3f4b5b2ac79..559179d018f 100644
+index 3f4b5b2ac7..559179d018 100644
 --- a/release/src/router/openssl-1.1/test/certs/ee-ed25519.pem
 +++ b/release/src/router/openssl-1.1/test/certs/ee-ed25519.pem
 @@ -1,9 +1,38 @@
@@ -1865,7 +2785,7 @@ index 3f4b5b2ac79..559179d018f 100644
 +NZgau66WuZOzy45F48DvLlwH
  -----END CERTIFICATE-----
 diff --git a/release/src/router/openssl-1.1/test/certs/root-ed25519.pem b/release/src/router/openssl-1.1/test/certs/root-ed25519.pem
-index e509d540110..44077801ed3 100644
+index e509d54011..44077801ed 100644
 --- a/release/src/router/openssl-1.1/test/certs/root-ed25519.pem
 +++ b/release/src/router/openssl-1.1/test/certs/root-ed25519.pem
 @@ -1,9 +1,40 @@
@@ -1917,7 +2837,7 @@ index e509d540110..44077801ed3 100644
 +xVlDmGY3bbdZUV20nR2JJbT2h0O30zuFuY7hqEYE
  -----END CERTIFICATE-----
 diff --git a/release/src/router/openssl-1.1/test/certs/rootCA.pem b/release/src/router/openssl-1.1/test/certs/rootCA.pem
-index ef73d001b67..c2abbf8a58a 100644
+index ef73d001b6..c2abbf8a58 100644
 --- a/release/src/router/openssl-1.1/test/certs/rootCA.pem
 +++ b/release/src/router/openssl-1.1/test/certs/rootCA.pem
 @@ -1,21 +1,79 @@
@@ -2019,7 +2939,7 @@ index ef73d001b67..c2abbf8a58a 100644
 +lHvfOWFL43y56ncJAbzs2xz6QhttHbFRX+SH3UEkAKJS4BrAHA==
  -----END CERTIFICATE-----
 diff --git a/release/src/router/openssl-1.1/test/exptest.c b/release/src/router/openssl-1.1/test/exptest.c
-index cde4d6bc454..b7098713470 100644
+index cde4d6bc45..b709871347 100644
 --- a/release/src/router/openssl-1.1/test/exptest.c
 +++ b/release/src/router/openssl-1.1/test/exptest.c
 @@ -1,5 +1,5 @@
@@ -2082,7 +3002,7 @@ index cde4d6bc454..b7098713470 100644
  
      return ret;
 diff --git a/release/src/router/openssl-1.1/test/pemtest.c b/release/src/router/openssl-1.1/test/pemtest.c
-index 3203d976be7..ba10824bf94 100644
+index 3203d976be..ba10824bf9 100644
 --- a/release/src/router/openssl-1.1/test/pemtest.c
 +++ b/release/src/router/openssl-1.1/test/pemtest.c
 @@ -1,5 +1,5 @@
@@ -2133,7 +3053,7 @@ index 3203d976be7..ba10824bf94 100644
      return 1;
  }
 diff --git a/release/src/router/openssl-1.1/test/recipes/80-test_cms.t b/release/src/router/openssl-1.1/test/recipes/80-test_cms.t
-index 5dc6a3aebe0..79ae1308ecc 100644
+index 5dc6a3aebe..79ae1308ec 100644
 --- a/release/src/router/openssl-1.1/test/recipes/80-test_cms.t
 +++ b/release/src/router/openssl-1.1/test/recipes/80-test_cms.t
 @@ -1,5 +1,5 @@
@@ -2177,7 +3097,7 @@ index 5dc6a3aebe0..79ae1308ecc 100644
 +            "Check failure during BIO setup with -stream is handled correctly");
 +    });
 diff --git a/release/src/router/openssl-1.1/test/recipes/95-test_external_pyca_data/cryptography.sh b/release/src/router/openssl-1.1/test/recipes/95-test_external_pyca_data/cryptography.sh
-index 0af3e56c980..4ca3cae1170 100755
+index 0af3e56c98..4ca3cae117 100755
 --- a/release/src/router/openssl-1.1/test/recipes/95-test_external_pyca_data/cryptography.sh
 +++ b/release/src/router/openssl-1.1/test/recipes/95-test_external_pyca_data/cryptography.sh
 @@ -1,6 +1,6 @@
@@ -2213,7 +3133,7 @@ index 0af3e56c980..4ca3cae1170 100755
  deactivate
 diff --git a/release/src/router/openssl-1.1/test/smime-certs/badrsa.pem b/release/src/router/openssl-1.1/test/smime-certs/badrsa.pem
 new file mode 100644
-index 00000000000..f824fc22673
+index 0000000000..f824fc2267
 --- /dev/null
 +++ b/release/src/router/openssl-1.1/test/smime-certs/badrsa.pem
 @@ -0,0 +1,18 @@
@@ -2236,7 +3156,7 @@ index 00000000000..f824fc22673
 +j8BAwrKKaFvdlZS9k1Ypb2+UQY75mKJE9Bg=
 +-----END CERTIFICATE-----
 diff --git a/release/src/router/openssl-1.1/test/sslapitest.c b/release/src/router/openssl-1.1/test/sslapitest.c
-index 685c28d9349..5ee982ab06c 100644
+index 685c28d934..5ee982ab06 100644
 --- a/release/src/router/openssl-1.1/test/sslapitest.c
 +++ b/release/src/router/openssl-1.1/test/sslapitest.c
 @@ -1,5 +1,5 @@
@@ -2413,7 +3333,7 @@ index 685c28d9349..5ee982ab06c 100644
      ADD_TEST(test_tlsext_status_type);
  #endif
 diff --git a/release/src/router/openssl-1.1/test/test_test.c b/release/src/router/openssl-1.1/test/test_test.c
-index 74a230c1966..cec0368648c 100644
+index 74a230c196..cec0368648 100644
 --- a/release/src/router/openssl-1.1/test/test_test.c
 +++ b/release/src/router/openssl-1.1/test/test_test.c
 @@ -1,5 +1,5 @@
@@ -2456,7 +3376,7 @@ index 74a230c1966..cec0368648c 100644
          goto err;
      return 1;
  
-@@ -56,19 +56,19 @@ static int test_int(void)
+@@ -56,19 +56,19 @@ err:
  static int test_uint(void)
  {
      if (!TEST(1, TEST_uint_eq(3u, 3u))
@@ -2489,7 +3409,7 @@ index 74a230c1966..cec0368648c 100644
          goto err;
      return 1;
  
-@@ -79,19 +79,19 @@ static int test_uint(void)
+@@ -79,19 +79,19 @@ err:
  static int test_char(void)
  {
      if (!TEST(1, TEST_char_eq('a', 'a'))
@@ -2522,7 +3442,7 @@ index 74a230c1966..cec0368648c 100644
          goto err;
      return 1;
  
-@@ -102,19 +102,19 @@ static int test_char(void)
+@@ -102,19 +102,19 @@ err:
  static int test_uchar(void)
  {
      if (!TEST(1, TEST_uchar_eq(49, 49))
@@ -2555,7 +3475,7 @@ index 74a230c1966..cec0368648c 100644
          goto err;
      return 1;
  
-@@ -125,19 +125,19 @@ static int test_uchar(void)
+@@ -125,19 +125,19 @@ err:
  static int test_long(void)
  {
      if (!TEST(1, TEST_long_eq(123l, 123l))
@@ -2588,7 +3508,7 @@ index 74a230c1966..cec0368648c 100644
          goto err;
      return 1;
  
-@@ -148,19 +148,19 @@ static int test_long(void)
+@@ -148,19 +148,19 @@ err:
  static int test_ulong(void)
  {
      if (!TEST(1, TEST_ulong_eq(919ul, 919ul))
@@ -2621,7 +3541,7 @@ index 74a230c1966..cec0368648c 100644
          goto err;
      return 1;
  
-@@ -171,19 +171,19 @@ static int test_ulong(void)
+@@ -171,19 +171,19 @@ err:
  static int test_size_t(void)
  {
      if (!TEST(1, TEST_size_t_eq((size_t)10, (size_t)10))
@@ -2654,7 +3574,7 @@ index 74a230c1966..cec0368648c 100644
          goto err;
      return 1;
  
-@@ -194,19 +194,19 @@ static int test_size_t(void)
+@@ -194,19 +194,19 @@ err:
  static int test_time_t(void)
  {
      if (!TEST(1, TEST_time_t_eq((time_t)10, (time_t)10))
@@ -2720,7 +3640,7 @@ index 74a230c1966..cec0368648c 100644
          goto err;
      return 1;
  
-@@ -243,9 +243,9 @@ static int test_pointer(void)
+@@ -243,9 +243,9 @@ err:
  static int test_bool(void)
  {
      if (!TEST(0, TEST_true(0))
@@ -2911,7 +3831,7 @@ index 74a230c1966..cec0368648c 100644
  
      r = 1;
 diff --git a/release/src/router/openssl-1.1/test/testutil/driver.c b/release/src/router/openssl-1.1/test/testutil/driver.c
-index 670f5b80cee..094e2a3fc01 100644
+index 670f5b80ce..094e2a3fc0 100644
 --- a/release/src/router/openssl-1.1/test/testutil/driver.c
 +++ b/release/src/router/openssl-1.1/test/testutil/driver.c
 @@ -1,5 +1,5 @@
@@ -2931,7 +3851,7 @@ index 670f5b80cee..094e2a3fc01 100644
      char *TAP_levels = getenv("HARNESS_OSSL_LEVEL");
      char *test_seed = getenv("OPENSSL_TEST_RAND_ORDER");
 diff --git a/release/src/router/openssl-1.1/test/v3nametest.c b/release/src/router/openssl-1.1/test/v3nametest.c
-index d1852190b84..566472ab966 100644
+index d1852190b8..566472ab96 100644
 --- a/release/src/router/openssl-1.1/test/v3nametest.c
 +++ b/release/src/router/openssl-1.1/test/v3nametest.c
 @@ -1,5 +1,5 @@
@@ -2956,3 +3876,6 @@ index d1852190b84..566472ab966 100644
      }
  };
  
+-- 
+2.34.1
+
