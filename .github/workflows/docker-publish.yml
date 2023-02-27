@@ -43,12 +43,11 @@ jobs:
       - name: Setup python-3 header
         working-directory: /workdir
         run: |
-          wget http://security.ubuntu.com/ubuntu/pool/main/p/python3.8/libpython3.8-dev_3.8.10-0ubuntu1~20.04.6_i386.deb
-          dpkg -x libpython3.8-dev_3.8.10-0ubuntu1~20.04.6_i386.deb libpython3
+          wget http://ftp.us.debian.org/debian/pool/main/p/python3.9/libpython3.9-dev_3.9.2-1_armel.deb
+          dpkg -x libpython3.9-dev_3.9.2-1_armel.deb libpython3
           ls libpython3
-          sudo mkdir -p /usr/include/arm-linux-gnueabi
-          sudo cp -r libpython3/usr/include/ /usr/include/arm-linux-gnueabi/
-          ls /usr/include/arm-linux-gnueabi
+          sudo mkdir -p /usr/include/arm-linux-gnueabi/python3.8
+          sudo cp libpython3/usr/include/arm-linux-gnueabi/python3.9/pyconfig.h usr/include/arm-linux-gnueabi/python3.8/pyconfig.h
 
       - name: Clone source code
         working-directory: /workdir
