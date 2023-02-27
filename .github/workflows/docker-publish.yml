@@ -29,7 +29,7 @@ jobs:
           sudo -E apt-get -qq install curl vim sudo libtool-bin cmake libproxy-dev uuid-dev liblzo2-dev autoconf autoconf-archive automake bash bison \
                        bzip2 diffutils file flex m4 g++ gawk groff-base libncurses5-dev libtool libslang2 make patch perl pkg-config shtool \
                        subversion tar texinfo zlib1g zlib1g-dev gettext libexpat1-dev libssl-dev cvs gperf unzip \
-                       python2 libxml-parser-perl gcc-multilib gconf-editor libxml2-dev g++-multilib git gitk libncurses5 mtd-utils \
+                       python2-dev python3.8-dev:i386 libxml-parser-perl gcc-multilib gconf-editor libxml2-dev g++-multilib git gitk libncurses5 mtd-utils \
                       libncurses5-dev libvorbis-dev autopoint autogen sed build-essential intltool libglib2.0-dev \
                       xutils-dev lib32z1-dev lib32stdc++6 xsltproc gtk-doc-tools automake-1.15 locales libelf1:i386 gosu bc rsync python-is-python2
           sudo -E apt-get -qq autoremove --purge
@@ -43,8 +43,8 @@ jobs:
       - name: Clone source code
         working-directory: /workdir
         run: |
-          git clone --depth=1 https://github.com/SylphiaWindy/am-toolchains toolchain
-          git clone --branch=master https://github.com/RMerl/asuswrt-merlin.ng merlin
+          git clone --depth 1 https://github.com/SylphiaWindy/am-toolchains toolchain
+          git clone -b master --single-branch https://github.com/RMerl/asuswrt-merlin.ng merlin
 
       - name: Setting up toolchains
         run: |
