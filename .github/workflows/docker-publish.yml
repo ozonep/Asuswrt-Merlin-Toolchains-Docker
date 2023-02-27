@@ -44,7 +44,7 @@ jobs:
         working-directory: /workdir
         run: |
           wget http://security.ubuntu.com/ubuntu/pool/main/p/python3.8/libpython3.8-dev_3.8.10-0ubuntu1~20.04.6_i386.deb
-          dpkg -x libpython3.8-dev_3.8.10-0ubuntu1~20.04.6_i386 libpython3
+          dpkg -x libpython3.8-dev_3.8.10-0ubuntu1~20.04.6_i386.deb libpython3
           sudo cp -r libpython3/usr/include/* /usr/include/arm-linux-gnueabi/
 
       - name: Clone source code
