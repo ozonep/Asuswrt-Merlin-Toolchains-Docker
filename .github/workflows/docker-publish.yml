@@ -47,7 +47,7 @@ jobs:
           dpkg -x libpython3.9-dev_3.9.2-1_armel.deb libpython3
           ls libpython3
           sudo mkdir -p /usr/include/arm-linux-gnueabi/python3.8
-          sudo cp libpython3/usr/include/arm-linux-gnueabi/python3.9/pyconfig.h usr/include/arm-linux-gnueabi/python3.8/pyconfig.h
+          sudo cp -r libpython3/usr/include/arm-linux-gnueabi/python3.9/pyconfig.h /usr/include/arm-linux-gnueabi/python3.8/pyconfig.h
 
       - name: Clone source code
         working-directory: /workdir
