@@ -164,8 +164,8 @@ AM_CONDITIONAL(HAVE_SWIG, test x"${swig_found}" = x"yes")
 AC_MSG_CHECKING(whether to create python bindings)
 AC_ARG_WITH(python,
 AS_HELP_STRING([--with-python],[enable building python bindings]),
-use_python=$withval,
-use_python=auto)
+use_python=no,
+use_python=no)
 if test "x$use_python" = xno ; then
 	python_found="no"
 	AC_MSG_RESULT(no)
