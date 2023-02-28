@@ -24,7 +24,6 @@ jobs:
           DEBIAN_FRONTEND: noninteractive
         run: |
           sudo dpkg --add-architecture i386
-          sudo add-apt-repository ppa:git-core/ppa -y
           sudo -E apt-get -qq update
           sudo -E apt-get -qq install curl wget vim sudo libtool-bin cmake libproxy-dev uuid-dev liblzo2-dev autoconf autoconf-archive automake bash bison \
                        bzip2 diffutils file flex m4 g++ gawk groff-base libncurses5-dev libtool libslang2 make patch perl pkg-config shtool \
