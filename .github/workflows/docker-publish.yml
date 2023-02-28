@@ -24,11 +24,11 @@ jobs:
           DEBIAN_FRONTEND: noninteractive
         run: |
           sudo apt-get update
-			    sudo apt-get -y dist-upgrade
+          sudo apt-get -y dist-upgrade
           sudo dpkg --add-architecture i386
           sudo apt-get update
           sudo apt-get -y install "linux-headers-$(uname -r)"
-          sudo apt-get -y install curl wget vim sudo libtool-bin cmake libproxy-dev uuid-dev liblzo2-dev autoconf autoconf-archive automake bash bison \
+          sudo apt-get -y install curl wget vim libtool-bin cmake libproxy-dev uuid-dev liblzo2-dev autoconf autoconf-archive automake bash bison \
                        bzip2 diffutils file flex m4 g++ gawk groff-base libncurses5-dev libtool libslang2 make patch perl pkg-config shtool \
                        subversion tar texinfo zlib1g zlib1g-dev gettext libexpat1-dev libssl-dev cvs gperf unzip \
                        python2 libpython2.7:i386 libxml-parser-perl gcc-multilib libxml2-dev g++-multilib git gitk libncurses5 mtd-utils \
