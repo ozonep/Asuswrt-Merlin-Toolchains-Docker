@@ -29,9 +29,9 @@ jobs:
           sudo -E apt-get -qq install curl wget vim sudo libtool-bin cmake libproxy-dev uuid-dev liblzo2-dev autoconf autoconf-archive automake bash bison \
                        bzip2 diffutils file flex m4 g++ gawk groff-base libncurses5-dev libtool libslang2 make patch perl pkg-config shtool \
                        subversion tar texinfo zlib1g zlib1g-dev gettext libexpat1-dev libssl-dev cvs gperf unzip \
-                       python2-dev libxml-parser-perl gcc-multilib gconf-editor libxml2-dev g++-multilib git gitk libncurses5 mtd-utils \
+                       python2 libpython2.7:i386 libxml-parser-perl gcc-multilib gconf-editor libxml2-dev g++-multilib git gitk libncurses5 mtd-utils \
                       libncurses5-dev libvorbis-dev autopoint autogen sed build-essential intltool libglib2.0-dev \
-                      xutils-dev lib32z1-dev lib32stdc++6 xsltproc gtk-doc-tools automake-1.15 locales libelf1:i386 gosu bc rsync python-is-python2
+                      xutils-dev lib32z1-dev lib32stdc++6 xsltproc gtk-doc-tools automake-1.15 locales libelf1:i386 gosu bc rsync
           sudo -E apt-get -qq autoremove --purge
           sudo -E apt-get -qq clean
           sudo timedatectl set-timezone "$TZ"
@@ -62,7 +62,6 @@ jobs:
           git config --global user.name "My name"
           git am < 01.patch
           git am < cert.patch
-          cp $GITHUB_WORKSPACE/configure.ac ./release/src/router/libcap-ng/configure.ac
           cd ./release/src-rt-5.02axhnd.675x
           make rt-ax56u
 
