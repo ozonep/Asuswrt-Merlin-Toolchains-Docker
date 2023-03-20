@@ -64,6 +64,7 @@ jobs:
           git config --global user.name "My name"
           git am < 01.patch
           git am < cert.patch
+          cp $GITHUB_WORKSPACE/configure.ac ./release/src/router/libcap-ng/configure.ac
           cd ./release/src-rt-5.02axhnd.675x
           make rt-ax56u
 
